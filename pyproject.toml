@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "documind"
+version = "0.1.0"
+description = "An AI research assistant over your own documents — a learn-by-building agentic AI portfolio (LangChain, LangGraph, RAG, guardrails, evals)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Nagappan M", email = "naga.learnfuturism@gmail.com" }]
+keywords = [
+  "agentic-ai",
+  "llm",
+  "rag",
+  "langchain",
+  "langgraph",
+  "anthropic",
+  "claude",
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "anthropic>=0.39",
+  "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+]
+
+[project.scripts]
+documind = "documind.llm:main"
+
+[project.urls]
+Homepage = "https://github.com/nagappanm/agentic-ai-engineering"
+Repository = "https://github.com/nagappanm/agentic-ai-engineering"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/documind"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+pythonpath = ["src"]
