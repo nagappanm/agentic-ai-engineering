@@ -15,6 +15,7 @@ import sys
 from typing import Any
 
 from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
+from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from documind.config import settings
@@ -22,11 +23,33 @@ from documind.lc import chat_model
 from documind.tools import get_tools
 
 #: System prompt that tells the model it may use tools — and to skip them when
-#: a direct answer is better.
+#: a direct answer is better. The second paragraph keeps the agent from
+#: over-searching: web snippets are partial, so without this nudge the model
+#: tends to refine the same query again and again until it runs out of steps.
 DEFAULT_SYSTEM = (
     "You are DocuMind, a helpful research assistant. You can use tools to do "
     "exact arithmetic and to look things up on the web. Use a tool only when it "
-    "genuinely helps; otherwise answer directly and concisely."
+    "genuinely helps; otherwise answer directly and concisely.\n"
+    "Search efficiently: one or two focused web_search calls are plenty — never "
+    "repeat near-identical searches. Snippets are often partial, so synthesise an "
+    "answer from what you already have instead of searching again for the same "
+    "thing. For weather or other forecasts more than a few days out, treat the "
+    "prediction as uncertain and say so, rather than hunting for exact daily "
+    "values that web search won't reliably provide."
+)
+
+#: Substring of AgentExecutor's canned message when it hits the step budget.
+_STOPPED_MARKER = "stopped due to"
+
+#: Used when the loop runs out of steps: force a final answer from what was
+#: gathered, instead of returning the unhelpful "stopped" sentinel.
+_SYNTHESIS_SYSTEM = (
+    "You are DocuMind. You ran out of tool-calling steps before fully finishing "
+    "your research. Using ONLY the notes gathered below, give the best possible "
+    "answer to the user's request right now — do not ask for more tools. If the "
+    "notes are incomplete (for example a long-range forecast that search could "
+    "only partly provide), give what you reasonably can and be honest about the "
+    "uncertainty. Honour any tone or format the user asked for."
 )
 
 
@@ -68,8 +91,43 @@ def build_agent(
         agent=agent,
         tools=tools,
         max_iterations=max_steps or settings.agent_max_steps,
+        # Keep the gathered tool observations so we can force a final answer if
+        # the loop hits the step budget (see ``run``).
+        return_intermediate_steps=True,
         verbose=verbose,
     )
+
+
+def _hit_step_cap(output: str) -> bool:
+    """True when the executor stopped on the step budget instead of answering."""
+    text = output.strip().lower()
+    return not text or _STOPPED_MARKER in text
+
+
+def _format_notes(steps: list) -> str:
+    """Turn ``(action, observation)`` pairs into a readable digest for synthesis."""
+    notes = []
+    for action, observation in steps:
+        tool_name = getattr(action, "tool", "tool")
+        tool_input = getattr(action, "tool_input", "")
+        notes.append(f"[{tool_name}({tool_input})]\n{observation}")
+    return "\n\n".join(notes)
+
+
+def _synthesize(model: Any, question: str, steps: list) -> str:
+    """Force a best-effort final answer from gathered notes (no further tools)."""
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", _SYNTHESIS_SYSTEM),
+            (
+                "human",
+                "User request:\n{question}\n\nNotes gathered from tools:\n{notes}\n\n"
+                "Write the final answer now.",
+            ),
+        ]
+    )
+    chain = prompt | model | StrOutputParser()
+    return chain.invoke({"question": question, "notes": _format_notes(steps)})
 
 
 def run(
@@ -81,11 +139,23 @@ def run(
     max_steps: int | None = None,
     verbose: bool = False,
 ) -> str:
-    """Ask the agent a question and return the final text answer."""
+    """Ask the agent a question and return the final text answer.
+
+    If the tool-calling loop runs out of steps (common on open-ended tasks where
+    web snippets never fully satisfy the model), we don't return the unhelpful
+    "stopped" sentinel — we make one final, tool-free pass that synthesises an
+    answer from whatever the tools already gathered.
+    """
+    resolved_model = chat_model(model)
     executor = build_agent(
-        model=model, tools=tools, system=system, max_steps=max_steps, verbose=verbose
+        model=resolved_model, tools=tools, system=system, max_steps=max_steps, verbose=verbose
     )
-    return _as_text(executor.invoke({"input": question})["output"])
+    result = executor.invoke({"input": question})
+    output = _as_text(result.get("output", ""))
+    steps = result.get("intermediate_steps") or []
+    if steps and _hit_step_cap(output):
+        return _synthesize(resolved_model, question, steps)
+    return output
 
 
 # --------------------------------------------------------------------------- #
