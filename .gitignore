@@ -24,6 +24,9 @@ data/
 *.sqlite3
 .chroma/
 
+# Scratch LinkedIn carousel assets (not part of the package)
+linkedin_assets/
+
 # OS / editor
 .DS_Store
 .idea/
