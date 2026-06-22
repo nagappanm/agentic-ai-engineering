@@ -39,6 +39,15 @@ dev = [
 local = [
   "openai>=1.0",
 ]
+# Optional: Module 2 — LangChain chain, tools, and tool-calling agent.
+# Install with:  pip install -e ".[langchain]"
+langchain = [
+  "langchain>=1.0",
+  "langchain-classic>=1.0",
+  "langchain-anthropic>=1.0",
+  "langchain-community>=0.4",
+  "ddgs>=9.0",
+]
 
 [project.scripts]
 documind = "documind.llm:main"

@@ -20,7 +20,7 @@ module that follows.
 
 ---
 
-## Module 2 — LangChain `v2-langchain` 🔜
+## Module 2 — LangChain `v2-langchain` ✅
 
 **Build:** wrap the model in a LangChain chain, then add a first tool (a
 calculator and a web search) and let the model decide when to call it.
