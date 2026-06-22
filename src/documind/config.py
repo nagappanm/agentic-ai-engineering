@@ -46,6 +46,10 @@ class Settings:
     #: placeholder is fine — the SDK only needs a non-empty string.
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "not-needed")
 
+    #: Max reason → act steps the Module 2 agent may take before stopping.
+    #: Bounds the tool-calling loop so a confused model can't run forever.
+    agent_max_steps: int = int(os.getenv("DOCUMIND_AGENT_MAX_STEPS", "5"))
+
     @property
     def is_configured(self) -> bool:
         """True when the selected backend has what it needs to run.
