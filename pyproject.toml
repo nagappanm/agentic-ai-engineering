@@ -34,6 +34,11 @@ dev = [
   "pytest>=8.0",
   "ruff>=0.6",
 ]
+# Optional: talk to an OpenAI-compatible server (GPT4All, LM Studio, Ollama)
+# via DOCUMIND_PROVIDER=openai. Install with:  pip install -e ".[local]"
+local = [
+  "openai>=1.0",
+]
 
 [project.scripts]
 documind = "documind.llm:main"

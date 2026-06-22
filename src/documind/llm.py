@@ -90,9 +90,99 @@ class LLMClient:
             yield from stream.text_stream
 
 
+class OpenAICompatibleClient:
+    """Drop-in backend for any OpenAI-compatible server.
+
+    Exposes the same ``ask`` / ``stream`` surface as :class:`LLMClient`, so the
+    rest of DocuMind doesn't care which backend is active. Selected by setting
+    ``DOCUMIND_PROVIDER=openai`` — handy for a local GPT4All / LM Studio / Ollama
+    server when you have no Anthropic credits. Note: small local models are fine
+    for the early modules but generally lack the tool-calling the agentic
+    modules rely on.
+    """
+
+    def __init__(self, client: Any | None = None) -> None:
+        # Tests inject a fake client; otherwise build a real OpenAI SDK client
+        # pointed at the local server. Imported lazily so the dependency is only
+        # needed when this backend is actually used.
+        if client is not None:
+            self._client = client
+            return
+        try:
+            from openai import OpenAI
+        except ModuleNotFoundError as exc:  # pragma: no cover - import guard
+            raise RuntimeError(
+                "The 'openai' package is required for DOCUMIND_PROVIDER=openai.\n"
+                "Install it with:  pip install openai"
+            ) from exc
+        self._client = OpenAI(base_url=settings.base_url, api_key=settings.openai_api_key)
+
+    @staticmethod
+    def _messages(question: str, system: str | None) -> list[dict[str, str]]:
+        """Build OpenAI-style messages (``system`` becomes its own message)."""
+        messages: list[dict[str, str]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": question})
+        return messages
+
+    def ask(
+        self,
+        question: str,
+        *,
+        system: str | None = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
+        """Send a single question and return the full text answer."""
+        response = self._client.chat.completions.create(
+            model=model or settings.dev_model,
+            max_tokens=max_tokens or settings.max_tokens,
+            messages=self._messages(question, system),
+        )
+        return response.choices[0].message.content or ""
+
+    def stream(
+        self,
+        question: str,
+        *,
+        system: str | None = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+    ):
+        """Yield the answer token-by-token for a responsive CLI experience.
+
+        Some local servers (e.g. GPT4All) don't support streaming. If the
+        streaming request is rejected, fall back to a single blocking call and
+        emit the whole answer at once, so the CLI keeps working either way.
+        """
+        kwargs: dict[str, Any] = {
+            "model": model or settings.dev_model,
+            "max_tokens": max_tokens or settings.max_tokens,
+            "messages": self._messages(question, system),
+        }
+        try:
+            stream = self._client.chat.completions.create(stream=True, **kwargs)
+        except Exception:
+            response = self._client.chat.completions.create(**kwargs)
+            yield response.choices[0].message.content or ""
+            return
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
+
+
+def make_client() -> LLMClient | OpenAICompatibleClient:
+    """Return the backend chosen by ``DOCUMIND_PROVIDER`` (default: Anthropic)."""
+    if settings.provider == "openai":
+        return OpenAICompatibleClient()
+    return LLMClient()
+
+
 def ask(question: str, **kwargs: Any) -> str:
-    """Convenience helper: one-shot question with a default client."""
-    return LLMClient().ask(question, **kwargs)
+    """Convenience helper: one-shot question with the configured backend."""
+    return make_client().ask(question, **kwargs)
 
 
 # --------------------------------------------------------------------------- #
@@ -108,7 +198,7 @@ def _banner(title: str) -> None:
 
 def _demo() -> None:
     """Show, concretely, what a bare LLM can and cannot do."""
-    client = LLMClient()
+    client = make_client()
 
     _banner("1. General knowledge — the LLM is great at this")
     print("Q: In one sentence, what is retrieval-augmented generation?\n")
@@ -155,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     question = " ".join(argv)
-    for chunk in LLMClient().stream(question):
+    for chunk in make_client().stream(question):
         print(chunk, end="", flush=True)
     print()
     return 0
