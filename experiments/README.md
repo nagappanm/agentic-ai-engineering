@@ -21,7 +21,7 @@ call and captures the agent's tool-call trace.
 |---|--------|---------------------|
 | 1 | `exp1_chain_vs_agent.py` | Chain vs. agent vs. structured output — when is each the right abstraction? |
 | 2 | `exp2_ablation.py` | Does the anti-over-search nudge actually cut tool calls? How does `max_steps` interact? |
-| 3 | `exp3_weather_tool.py` | Does a real weather API (`weather_tool.py`) beat DuckDuckGo snippets for the weather query? |
+| 3 | `exp3_weather_tool.py` | Does a real weather API (Open-Meteo) beat DuckDuckGo snippets for the weather query? |
 
 ## Findings
 
@@ -81,9 +81,10 @@ a bigger lever than any prompt-engineering of a weak tool.
 
 > ⚠️ Environment gotcha (recorded so it doesn't bite again): a stock python.org
 > build on macOS fails TLS verification from `urllib` with
-> `CERTIFICATE_VERIFY_FAILED`. `weather_tool.py` fixes it by passing certifi's CA
-> bundle (`ssl.create_default_context(cafile=certifi.where())`).
+> `CERTIFICATE_VERIFY_FAILED`. The tool fixes it by passing certifi's CA bundle
+> (`ssl.create_default_context(cafile=certifi.where())`).
 
-**Candidate to graduate:** `weather_forecast` is a strong addition to
-`documind/tools.py` — keyless, grounded, and it makes the agent converge in one
-step on exactly the query that originally hit the step-budget cap.
+**Graduated ✅:** `weather_forecast` now lives in `documind/tools.py` and is part
+of `get_tools()` — keyless, grounded, and it makes the agent converge in one
+step on exactly the query that originally hit the step-budget cap. `exp3` now
+imports it from the package rather than a local copy.

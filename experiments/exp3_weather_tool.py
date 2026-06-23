@@ -9,9 +9,8 @@ compare: how many tools it calls, whether it hits the cap, and answer quality.
 from __future__ import annotations
 
 from harness import banner, preview, run_agent_traced
-from weather_tool import weather_forecast
 
-from documind.tools import calculator, web_search
+from documind.tools import calculator, weather_forecast, web_search
 
 QUESTION = "What's the weather in London for the next two weeks? Be specific about temperatures."
 

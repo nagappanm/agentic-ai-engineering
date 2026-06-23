@@ -10,9 +10,10 @@ Three new modules alongside the untouched Module 1 `documind.llm`:
 
 - `documind.chain` — the **LCEL chain**: `ChatPromptTemplate | model | StrOutputParser`.
   The bare Module 1 call, rebuilt the LangChain way. `python -m documind.chain "..."`.
-- `documind.tools` — two `@tool`-decorated tools: a **calculator** (exact arithmetic
-  via a safe AST evaluator — never `eval`) and a keyless **web_search** (DuckDuckGo
-  via `ddgs`).
+- `documind.tools` — three `@tool`-decorated tools: a **calculator** (exact
+  arithmetic via a safe AST evaluator — never `eval`), a keyless **web_search**
+  (DuckDuckGo via `ddgs`), and a **weather_forecast** (real daily data from the
+  keyless Open-Meteo API, graduated from the experiments — see below).
 - `documind.agent` — the **tool-calling agent**: `create_tool_calling_agent` +
   `AgentExecutor` bind the tools to the model and run the reason → act → observe
   loop. The model decides whether and which tool to call.
