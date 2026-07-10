@@ -43,7 +43,11 @@ Receipts closes that gap by making runtime behavior observable on every change. 
 
 - **Backend effects are asserted via declared probes.** The half a browser cannot see (DB writes, business logic) is checked through HTTP endpoints and/or read-only DB queries declared in `receipts.yaml`.
 
-- **PR-attribution by base-branch replay.** A failing scenario is replayed against the base branch; failing on both = pre-existing, failing only on the change = PR-attributable.
+- **Auth via scripted browser login by default; secrets only by env reference.** v1 obtains an authenticated session by running a scripted login flow (steps declared in `receipts.yaml`) through the browser, with optional direct session/cookie/token injection for apps that support it. Credentials are never written literally in `receipts.yaml` — it references environment variables, and the committed sample config uses only non-secret seed accounts. Authenticated flows are the acknowledged hard part of this class of tool, so v1 commits to one concrete mechanism rather than leaving it open.
+
+- **Scenario runs under an overall step budget.** Beyond the per-step self-heal budget, each scenario has a bounded total step budget; it ends when the LLM signals the flow is complete or the budget is hit. Hitting the budget is reported as stuck/inconclusive (distinct from a clean assertion failure), so the agentic loop cannot wander indefinitely.
+
+- **PR-attribution by re-driving on base, not replaying the head cache.** A failing scenario is re-run against the base branch as an *independent agentic drive with a fresh selector cache* — the head cache is deliberately **not** replayed on base, because the changed UI may not exist there and stale selectors would mislabel a pre-existing bug as PR-attributable. The base branch is built and started **once per run** and shared across all attributions. Failing on both = pre-existing; failing only on the change = PR-attributable.
 
 - **Deterministic tests via fakes; agentic path via live demo.** Following the DocuMind convention, unit tests inject a fake LLM and a stub/fixed target so the suite runs offline with no API key and no Docker. The real browser + real Claude path is exercised by a separately-marked live demo and integration test.
 
@@ -61,7 +65,7 @@ R2. Diff acquisition sits behind a `DiffSource` interface so a GitHub-PR source 
 
 R3. A target declares its build command, run command, readiness/health check, and base URL/port in a `receipts.yaml` at its root.
 
-R4. `receipts.yaml` also declares auth/seed setup (how to obtain an authenticated session and how to seed baseline data) and backend probes (named HTTP endpoints and/or read-only DB queries) usable for assertions.
+R4. `receipts.yaml` also declares auth/seed setup and backend probes (named HTTP endpoints and/or read-only DB queries) usable for assertions. An authenticated session is obtained by a scripted login flow run through the browser by default, with optional direct session/cookie/token injection; all credentials are referenced from environment variables (e.g. `${RECEIPTS_TEST_PASSWORD}`) and are never stored literally in the file.
 
 R5. Configuration is schema-validated with clear, actionable errors on missing or malformed fields.
 
@@ -83,6 +87,8 @@ R10. The plan focuses on flows the change touches — happy path plus adversaria
 
 R11. For each scenario, an agentic driver operates a real browser (Playwright), choosing actions from observed page state to accomplish the flow, while recording video, screenshots, and a structured action log.
 
+R11a. Each scenario runs under a bounded overall step budget; the scenario ends when the LLM signals the flow is complete or the budget is reached, in which case it is reported as stuck/inconclusive with evidence — a distinct verdict from a clean assertion failure.
+
 R12. Every resolved action is cached as `intent → concrete locator + input`. On replay the cache drives execution deterministically with no LLM call; the LLM re-engages only on a cache miss or a stale/failed selector (self-heal), bounded by a configurable per-step budget (default 3).
 
 R13. Backend effects are asserted through the declared probes (HTTP/DB) at the point in the flow where the change is expected to have taken effect.
@@ -93,7 +99,7 @@ R14. A scenario's verdict is layered: explicit DOM/text assertions and backend p
 
 R15. Each scenario emits a deterministic replay artifact (the resolved selector cache plus inputs) that reruns without the LLM and reproduces the same actions.
 
-R16. A finding is labeled PR-attributable vs. pre-existing by replaying the failing scenario against the base branch and comparing outcomes.
+R16. A finding is labeled PR-attributable vs. pre-existing by re-running the failing scenario against the base branch as an independent agentic drive with a fresh selector cache (the head cache is not replayed on base, since the changed UI may not exist there), comparing outcomes: fails on both ⇒ pre-existing; fails only on the change ⇒ PR-attributable. The base branch is built and started once per run and shared across all attributions.
 
 **Report**
 
@@ -109,7 +115,7 @@ R19. Given a prior run and a new commit, re-verify re-runs only the scenarios wh
 
 R20. A bundled full-stack sample app (FastAPI backend + a small frontend, with an auth flow) ships with its own `receipts.yaml` and 2–3 planted runtime bugs of the class the tool targets, used by the demo.
 
-R21. Deterministic unit tests inject a fake LLM and a stub/fixed target so the whole suite runs offline with no API key and no Docker; the agentic browser path is exercised only by a separately-marked live demo/integration test.
+R21. Tests are organized in three tiers: **(a) pure unit** — everything faked, including a fake browser page, running with no browser, server, network, API key, or Docker; **(b) integration** — a real browser drives the real sample app with a fake LLM (real Chromium and a running server, but no API key and no Docker); **(c) live** — real Claude and a real browser, exercised by the demo and a separately-marked test. The default CI-fast suite is tier (a); tiers (b) and (c) are marked and run explicitly.
 
 R22. `receipts review ./sample_app --base <ref>` runs the full pipeline end-to-end against the sample app via `SubprocessRuntime` and writes the markdown report; a `--demo` narrates the caught bugs.
 
@@ -121,15 +127,15 @@ R23. A project README plus a short write-up capture the architecture, the seven 
 
 F1. **Full review pipeline.**
 **Trigger:** `receipts review <path> --base <ref>`.
-**Steps:** `DiffSource` yields the change set + description → planner builds the `TestPlan` (steered by hints) → `Runtime` builds and starts the target and waits for health → for each scenario the driver drives the browser, self-healing via the selector cache, and runs backend probes → the layered judge sets each verdict → base-branch replay attributes failures → the `Reporter` emits markdown + evidence → runtime tears down. **Covers R1, R6, R8, R11, R13, R14, R16, R17.**
+**Steps:** `DiffSource` yields the change set + description → planner builds the `TestPlan` (steered by hints) → `Runtime` builds and starts the target and waits for health → for each scenario the driver drives the browser, self-healing via the selector cache, and runs backend probes → the layered judge sets each verdict → re-driving on base (built once per run) attributes failures → the `Reporter` emits markdown + evidence → runtime tears down. **Covers R1, R6, R8, R11, R13, R14, R16, R17.**
 
 F2. **Agentic drive with self-healing cache (within a scenario).**
 **Trigger:** a scenario begins.
 **Steps:** for each step, if a cached `intent → locator+input` exists, execute it deterministically; on a hit that fails or a miss, ask the LLM to resolve the action from observed page state, execute it, and update the cache; stop the step after the self-heal budget is exhausted (scenario fails with evidence). **Covers R11, R12, R15.**
 
-F3. **PR-attribution via base-branch replay.**
+F3. **PR-attribution by re-driving on base.**
 **Trigger:** a scenario fails on the change.
-**Steps:** rebuild/run the base branch, replay the same scenario from its cache → fails on base too ⇒ pre-existing; passes on base ⇒ PR-attributable. **Covers R16.**
+**Steps:** build/run the base branch once per run, re-drive the same scenario there as an independent agentic run with a fresh selector cache (not a replay of the head cache) → fails on base too ⇒ pre-existing; passes on base ⇒ PR-attributable. **Covers R16.**
 
 F4. **Re-verify on a pushed fix.**
 **Trigger:** `receipts review` on a new commit with a prior run present.
@@ -149,9 +155,13 @@ AE4. **Covers R12, R15.** Re-running a passed scenario drives entirely from the 
 
 AE5. **Covers R16.** A scenario that fails on the change and also fails when replayed on the base branch is labeled **pre-existing**, not PR-attributable.
 
-AE6. **Covers R21.** The full unit-test suite passes with a fake LLM and a stub target — **no network, no API key, no Docker**.
+AE6. **Covers R21(a).** The pure-unit suite passes with everything faked — **no browser, no server, no network, no API key, no Docker**.
 
 AE7. **Covers R22.** `receipts review ./sample_app --base main` runs end-to-end via `SubprocessRuntime` and writes a markdown report that catches the planted bugs.
+
+AE8. **Covers R21(b), R11.** The integration suite drives the real sample app in a real browser with a fake LLM — no API key, no Docker — and reproduces a planted-bug failure deterministically.
+
+AE9. **Covers R11a.** A scenario whose flow never completes reaches its step budget and is reported as stuck/inconclusive with evidence, not as a clean assertion failure.
 
 ---
 
@@ -193,6 +203,16 @@ Deferred to planning:
 - The severity rubric (dimensions and thresholds).
 - Sample-app frontend choice: React/Vite (realistic, heavier Node build) vs. a minimal vanilla-JS SPA (lighter, still full-stack) — pick the one that keeps the demo fast without weakening the browser story.
 - Model-routing thresholds (when Opus vs. Sonnet in the driver loop).
+
+---
+
+## Known Trade-offs (accepted for v1)
+
+Surfaced during spec review; noted rather than eliminated.
+
+- **Base-branch attribution roughly doubles provisioning.** Re-driving on base (R16) means a second build+run per review. Bounded by building/starting the base **once per run** and attributing all failing scenarios against that single instance; per-scenario base rebuilds are explicitly out of scope.
+- **The planner's scenario→line mapping is LLM-guessed and noisy.** Because re-verify (R19) selects affected scenarios, it uses changed **files** (a robust superset) rather than the planner's per-line motivating-lines mapping, so a bad mapping never silently skips a scenario. The line mapping is used only for report annotation (R17), where a wrong line is a cosmetic issue, not a correctness one.
+- **Severity (R17) ships with a deliberately minimal rubric.** Two dimensions — blast radius × reversibility/data-safety — mapped to low/medium/high, not a production-grade model. It is a required output, so it is defined, but kept small on purpose.
 
 ---
 

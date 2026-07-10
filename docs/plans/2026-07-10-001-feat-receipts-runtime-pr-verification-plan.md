@@ -29,7 +29,11 @@ Static reviewers read the diff; the bugs that reach production only appear when 
 
 - **LLM access is one thin injectable client.** A small `receipts/llm.py` wraps the `anthropic` SDK with model routing (Opus for planning, Sonnet for per-step driving/judging) and is injected everywhere, so tests pass a `FakeLLM` scripted per scenario. No LangChain.
 
-- **Driver caches resolved actions; the cache is the replay artifact.** `StepAction` records `intent → locator + input`. The driver tries the cache first (deterministic, no LLM), self-heals via the LLM on miss/failure up to a bounded budget (default 3), and persists the cache as the scenario's replay artifact (origin R12, R15). Replay = run from cache with the LLM disabled.
+- **Driver caches resolved actions; the cache is the replay artifact.** `StepAction` records `intent → locator + input`. The driver tries the cache first (deterministic, no LLM), self-heals via the LLM on miss/failure up to a bounded per-step budget (default 3), and persists the cache as the scenario's replay artifact (origin R12, R15). Replay = run from cache with the LLM disabled. Each scenario also runs under an overall step budget and ends on an LLM "done" signal or budget exhaustion (reported stuck/inconclusive), a distinct verdict from an assertion failure (origin R11a).
+
+- **Auth is scripted browser login; secrets via env only.** The driver logs in through the browser using steps from `receipts.yaml`, with optional session/cookie/token injection; credential fields resolve from environment variables and literals are rejected by config validation (origin R4).
+
+- **Attribution re-drives on base, never replays the head cache.** The head selector cache is not replayed on the base branch (the changed UI may be absent there); attribution is an independent agentic drive on base with a fresh cache, and the base is built/started **once per run** and shared across all failing scenarios (origin R16).
 
 - **Layered verdict.** Assertions and backend probes run first and are authoritative; the LLM-judge is invoked only when no machine check covers the expectation (origin R14). Keeps evidence trustworthy.
 
@@ -48,7 +52,7 @@ flowchart TD
     PL --> RT[Runtime: Subprocess or Docker builds+starts target]
     RT --> DR[Driver: Playwright agent + selector cache]
     DR --> AS[Layered judge: assertions + backend probes + LLM fallback]
-    AS --> AT[PR-attribution: base-branch replay]
+    AS --> AT[PR-attribution: re-drive on base, built once per run]
     AT --> RP[Reporter: markdown + evidence bundle]
     RP --> TD[Runtime teardown]
     DR -. cache miss/failed selector .-> HEAL[LLM self-heal, bounded budget]
@@ -112,9 +116,9 @@ flowchart TD
 
 **Files:** `receipts/config.py`, `receipts/tests/test_config.py`, `receipts/tests/fixtures/receipts.yaml`
 
-**Approach:** PyYAML → `TargetConfig` Pydantic model with fields for `build`, `run`, `health` (url + timeout), `base_url`/`port`, `runtime` (subprocess|docker), `auth` (scripted login steps or a session bootstrap), `seed`, `probes` (named HTTP endpoints and/or read-only DB queries), and `hints`. Validate with actionable errors.
+**Approach:** PyYAML → `TargetConfig` Pydantic model with fields for `build`, `run`, `health` (url + timeout), `base_url`/`port`, `runtime` (subprocess|docker), `auth` (scripted browser login steps and/or a session/cookie/token injection), `seed`, `probes` (named HTTP endpoints and/or read-only DB queries), and `hints`. Credential fields resolve from environment variables (e.g. `${RECEIPTS_TEST_PASSWORD}`); literal secrets are rejected by validation. Validate with actionable errors.
 
-**Test scenarios:** valid config parses; missing required field yields a clear error; unknown probe type rejected.
+**Test scenarios:** valid config parses; missing required field yields a clear error; unknown probe type rejected; a literal (non-env) credential value is rejected; an env-var reference resolves.
 
 **Verification:** the sample app's `receipts.yaml` (U10) loads clean.
 
@@ -160,15 +164,15 @@ flowchart TD
 
 **Goal:** Drive a scenario in a real browser, agentically, with a deterministic-on-replay selector cache.
 
-**Requirements:** R11, R12, R15.
+**Requirements:** R11, R11a, R12, R15.
 
 **Dependencies:** U1, U4, U5.
 
 **Files:** `receipts/driver.py`, `receipts/cache.py`, `receipts/tests/test_driver.py`, `receipts/tests/test_cache.py`
 
-**Approach:** For each step, if a `StepAction` cache entry exists, execute it directly (no LLM); on miss or failure, capture page state (accessible DOM snapshot + screenshot), ask Sonnet for the next concrete action, execute via Playwright, and record/update the cache. Bounded self-heal budget (default 3) per step, then fail the scenario with evidence. Record video (ffmpeg present), per-step screenshots, and a structured action log. Auth/seed run from `TargetConfig` before the flow. Persist the cache as the replay artifact; `replay(cache)` runs with the LLM disabled.
+**Approach:** For each step, if a `StepAction` cache entry exists, execute it directly (no LLM); on miss or failure, capture page state (accessible DOM snapshot + screenshot), ask Sonnet for the next concrete action, execute via Playwright, and record/update the cache. Bounded per-step self-heal budget (default 3), then fail the step with evidence. The scenario runs under an overall step budget; it ends when the LLM signals completion or the budget is hit — the latter reported as stuck/inconclusive, distinct from an assertion failure (R11a). Record video (ffmpeg present), per-step screenshots, and a structured action log. Auth/seed run from `TargetConfig` before the flow (scripted browser login by default). Persist the cache as the replay artifact; `replay(cache)` runs with the LLM disabled. Tier-(a) unit tests inject a fake browser page so the loop is exercised with no real Chromium; the real browser is tier (b).
 
-**Test scenarios:** against a fixed local HTML fixture served by SubprocessRuntime, a scripted `FakeLLM` drives a login+action flow and populates the cache; replay from the cache issues zero LLM calls and reproduces actions (AE4); a deliberately stale selector triggers self-heal within budget; exceeding the budget fails the scenario with a recorded reason.
+**Test scenarios:** with a fake page and scripted `FakeLLM`, the loop drives a login+action flow and populates the cache (tier a); replay from the cache issues zero LLM calls and reproduces actions (AE4); a deliberately stale selector triggers self-heal within the per-step budget; exceeding the per-step budget fails the step with a recorded reason; reaching the overall step budget without a completion signal reports the scenario as stuck/inconclusive (AE9); a tier-(b) test drives the real sample app in a real browser with `FakeLLM`.
 
 **Verification:** live drive of the sample app's flows produces video + action log; replay is LLM-free.
 
@@ -202,9 +206,9 @@ flowchart TD
 
 **Files:** `receipts/attribute.py`, `receipts/reverify.py`, `receipts/tests/test_attribute.py`, `receipts/tests/test_reverify.py`
 
-**Approach:** For a failing scenario, checkout/build the base ref via `Runtime`, replay the scenario from its cache, compare verdicts → pre-existing vs. PR-attributable (R16, AE5). Re-verify diffs a new commit against a stored prior run, selects scenarios whose motivating lines/flows changed, replays them, and reports resolution (R19, F4).
+**Approach:** Build and start the base ref via `Runtime` **once per run**, then for each failing scenario re-run it there as an independent agentic drive with a *fresh* selector cache — **not** a replay of the head cache, since the changed UI may be absent on base and stale selectors would mislabel a pre-existing bug. Compare verdicts → pre-existing vs. PR-attributable (R16, AE5). Re-verify diffs a new commit against a stored prior run and selects affected scenarios by changed **files** (a robust superset), not the planner's noisier per-line mapping, then re-drives them and reports resolution (R19, F4).
 
-**Test scenarios:** fail-on-both ⇒ pre-existing; fail-only-on-change ⇒ attributable; re-verify selects the right subset from a stored run and reports a resolved failure.
+**Test scenarios:** fail-on-both ⇒ pre-existing; fail-only-on-change ⇒ attributable; the base is provisioned once and shared across multiple failing scenarios; attribution does not replay head selectors on base (a fresh cache is used); re-verify selects the right file-based subset from a stored run and reports a resolved failure.
 
 **Verification:** demonstrated on the sample app by toggling a planted bug between base and head.
 
@@ -220,7 +224,7 @@ flowchart TD
 
 **Files:** `receipts/report.py`, `receipts/tests/test_report.py`
 
-**Approach:** `Reporter` ABC; `MarkdownReporter` writes a report (per-scenario pass/fail, severity via a documented rubric, offending lines, plain-English repro, links into the evidence bundle) to stdout + a run directory holding video/screenshots/action log/replay cache. GitHub-comment reporter is a seam only.
+**Approach:** `Reporter` ABC; `MarkdownReporter` writes a report (per-scenario pass/fail/inconclusive, severity, offending lines, plain-English repro, links into the evidence bundle) to stdout + a run directory holding video/screenshots/action log/replay cache. The v1 severity rubric is minimal and documented — two dimensions, **blast radius × reversibility/data-safety**, mapped to low/medium/high — not a production model. Offending lines come from the planner's motivating-lines annotation and are treated as best-effort (a wrong line is cosmetic, not a correctness issue). GitHub-comment reporter is a seam only.
 
 **Test scenarios:** a mixed pass/fail result set renders the expected markdown sections and severity ordering; evidence paths resolve.
 
@@ -256,9 +260,9 @@ flowchart TD
 
 **Files:** `receipts/pipeline.py`, `receipts/cli.py` (fill in), `receipts/tests/test_pipeline.py`
 
-**Approach:** `pipeline.run(...)` sequences F1 with guaranteed teardown. `--demo` points at the bundled sample app, runs the full flow via SubprocessRuntime, and narrates the caught planted bugs. An end-to-end test uses `FakeLLM` + the sample app to run the pipeline offline against a scripted plan.
+**Approach:** `pipeline.run(...)` sequences F1 with guaranteed teardown. `--demo` points at the bundled sample app, runs the full flow via SubprocessRuntime, and narrates the caught planted bugs. A tier-(a) pure-unit test covers `pipeline.run` wiring with all seams faked; a tier-(b) integration test (real browser + sample app + `FakeLLM`, no key/Docker) runs the pipeline against a scripted plan.
 
-**Test scenarios:** offline end-to-end with `FakeLLM` + sample app produces a report catching a planted bug (deterministic slice of AE7); teardown runs on mid-pipeline failure.
+**Test scenarios:** tier-(a) wiring test drives the pipeline with every seam faked and asserts stage ordering + guaranteed teardown on mid-pipeline failure; tier-(b) integration run with `FakeLLM` + sample app produces a report catching a planted bug (deterministic slice of AE7, matches AE8).
 
 **Verification:** `receipts review ./receipts/sample_app --base main` (live) writes a report catching the planted bugs (AE7); `--demo` narrates them.
 
@@ -297,6 +301,9 @@ Outside v1: live end-to-end `DockerRuntime` run in this sandbox (no daemon; buil
 - **Playwright/ffmpeg setup.** Chromium + ffmpeg are preinstalled; the Python `playwright` package must be installed and pinned (no `playwright install` needed — use the preinstalled browsers path).
 - **Sample-app build weight.** Frontend stack chosen for a fast build; if React/Vite is too heavy for the demo loop, fall back to a minimal vanilla SPA that still exercises a real browser flow.
 - **Anthropic credits** required for planner/driver/judge and the live demo.
+- **Attribution roughly doubles provisioning.** Re-driving on base is a second build+run; capped by building/starting the base **once per run** and sharing it across all failing scenarios (U8). Per-scenario base rebuilds are explicitly out.
+- **Planner line-attribution is noisy.** Re-verify selects affected scenarios by changed **files**, not the planner's per-line mapping, so a bad mapping never skips a scenario; the line mapping is used only for best-effort report annotation (U8, U9).
+- **Authenticated flows are the hard part.** v1 commits to scripted browser login (secrets via env only); apps needing real third-party OAuth/MFA are out of scope for v1 (U3, U6).
 
 ---
 
