@@ -22,7 +22,15 @@ const TASK_BRIEFS: Record<TaskType, string> = {
     "Produce Playwright + TypeScript spec skeletons from the given test cases. Use resilient locators, explicit waits over fixed sleeps, and leave a comment wherever a selector or value is UNKNOWN.",
   "defect-analysis":
     "Cluster the defects by area, risk, and impact, then recommend risk-based test focus areas. Justify each cluster against the evidence given.",
+  "code-review":
+    "Statically review the code change (the diff under 'Material under review') strictly against the requirements. For EACH requirement ID, state whether the change satisfies / partially satisfies / does not address it, citing the specific file, function, or hunk in the diff. Also flag: (a) requirements with no supporting code, (b) behaviour in the diff that no requirement asks for (scope creep), (c) risky assumptions, and (d) missing error or edge handling relative to the acceptance criteria. Do not reason about code you cannot see — if the diff is insufficient to judge a requirement, mark it UNKNOWN and say what you would need. Output findings as a list; tag each with a severity (high/medium/low) and the requirement ID it relates to.",
 };
+
+/** Render the material-under-review block (e.g. a PR diff), when present. */
+function materialSection(material?: string): string[] {
+  if (!material) return [];
+  return ["", "Material under review:", material];
+}
 
 /**
  * Pratyahara — withdrawal of noise. Build the smallest possible context block:
@@ -58,6 +66,7 @@ export function generatePrompt(
   config: YilsfConfig,
   task: TaskType,
   requirements: string,
+  material?: string,
 ): string {
   return [
     buildContext(config),
@@ -66,6 +75,7 @@ export function generatePrompt(
     "",
     "Requirements:",
     requirements,
+    ...materialSection(material),
   ].join("\n");
 }
 
@@ -74,6 +84,7 @@ export function critiquePrompt(
   config: YilsfConfig,
   requirements: string,
   draft: string,
+  material?: string,
 ): string {
   return [
     "You are now a critical reviewer of your own work. Be adversarial but fair.",
@@ -82,6 +93,7 @@ export function critiquePrompt(
     "",
     "Requirements:",
     requirements,
+    ...materialSection(material),
     "",
     "Draft to review:",
     draft,
@@ -104,6 +116,7 @@ export function validatePrompt(
   requirements: string,
   candidate: string,
   report: GuardrailReport,
+  material?: string,
 ): string {
   return [
     "You are the validator. Your job is to produce the final, stable artefact.",
@@ -112,6 +125,7 @@ export function validatePrompt(
     "",
     "Requirements:",
     requirements,
+    ...materialSection(material),
     "",
     "Candidate artefact:",
     candidate,

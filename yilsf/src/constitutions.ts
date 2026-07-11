@@ -36,8 +36,26 @@ export const bankingConstitution: Constitution = {
   ],
 };
 
+/**
+ * Rules for reviewing a code change against requirements. This is the framework
+ * pointed *away* from test generation — same discipline, different domain — so
+ * it demonstrates that YILSF is not QA-only.
+ */
+export const codeReviewConstitution: Constitution = {
+  name: "code-review",
+  rules: [
+    "Only reason about code present in the diff. Do not assume the behaviour of code you cannot see.",
+    "Cite a concrete file, function, or hunk for every finding — no unsupported claims.",
+    "Distinguish clearly between 'not implemented', 'implemented but incorrect', and 'cannot tell from this diff' (UNKNOWN).",
+    "For every requirement ID, give an explicit verdict: satisfied, partially satisfied, or not addressed.",
+    "Flag behaviour introduced by the diff that no requirement asks for (scope creep).",
+    "Never approve a change silently; if it is sound, say so and state what evidence supports that.",
+  ],
+};
+
 /** All shipped constitutions, keyed by name for config-driven lookup. */
 export const constitutions: Record<string, Constitution> = {
   [genericQeConstitution.name]: genericQeConstitution,
   [bankingConstitution.name]: bankingConstitution,
+  [codeReviewConstitution.name]: codeReviewConstitution,
 };

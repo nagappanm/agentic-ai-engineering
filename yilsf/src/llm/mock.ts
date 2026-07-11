@@ -21,6 +21,21 @@ function detectStage(params: LLMCompleteParams): MockStage {
   return "generate";
 }
 
+/** True when the prompt is a code-review task (has a diff under review). */
+function isCodeReview(params: LLMCompleteParams): boolean {
+  return params.messages.some((m) => /Material under review:/.test(m.content));
+}
+
+/** Build a guardrail-clean review-findings block covering each requirement. */
+function findingsFor(requirementIds: string[]): string {
+  const ids = requirementIds.length > 0 ? requirementIds : ["REQ-000"];
+  const rows = ids.map(
+    (id, i) =>
+      `F-${String(i + 1).padStart(3, "0")} | ${id} | satisfied | low | evidence: see diff for ${id}`,
+  );
+  return ["ID | Requirement | Verdict | Severity | Notes", ...rows].join("\n");
+}
+
 /** Build a small, guardrail-clean test-case block covering each requirement. */
 function testCasesFor(requirementIds: string[]): string {
   const ids = requirementIds.length > 0 ? requirementIds : ["REQ-000"];
@@ -45,26 +60,32 @@ export class MockProvider implements LLMProvider {
     const stage = detectStage(params);
     const lastUser = [...params.messages].reverse().find((m) => m.role === "user");
     const ids = extractRequirementIds(lastUser?.content ?? "");
-    const cases = testCasesFor(ids);
+
+    // Code review produces findings; every other task produces test cases.
+    const review = isCodeReview(params);
+    const body = review ? findingsFor(ids) : testCasesFor(ids);
+    const label = review ? "review findings" : "test cases";
 
     switch (stage) {
       case "generate":
-        return ["[mock] Draft test cases", "", cases].join("\n");
+        return [`[mock] Draft ${label}`, "", body].join("\n");
       case "critique":
         return [
           "[mock] Critique",
           "- No unsupported assumptions found.",
-          "- Positive, negative, and edge scenarios are present.",
+          review
+            ? "- Every requirement ID has an explicit verdict."
+            : "- Positive, negative, and edge scenarios are present.",
           "",
           "Refined version:",
-          cases,
+          body,
         ].join("\n");
       case "validate":
         return [
-          "[mock] Final validated artefact",
+          `[mock] Final validated ${label}`,
           "Resolved issues: none outstanding; all requirement IDs are covered.",
           "",
-          cases,
+          body,
         ].join("\n");
     }
   }

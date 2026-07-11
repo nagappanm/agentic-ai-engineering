@@ -4,20 +4,35 @@
  */
 
 export { YogaLLM } from "./pipeline.js";
-export type { YilsfResult, TraceStep } from "./pipeline.js";
+export type {
+  YilsfResult,
+  TraceStep,
+  WorkflowOptions,
+  WorkflowResult,
+} from "./pipeline.js";
 export { makeConfig, DEV_MODEL, REASONING_MODEL } from "./config.js";
 export {
   constitutions,
   genericQeConstitution,
   bankingConstitution,
+  codeReviewConstitution,
 } from "./constitutions.js";
 export {
   runGuardrails,
   formatReport,
   extractRequirementIds,
 } from "./guardrails.js";
-export type { GuardrailReport, GuardrailIssue } from "./guardrails.js";
-export { createProvider, AnthropicProvider, MockProvider } from "./llm/index.js";
+export type {
+  GuardrailReport,
+  GuardrailIssue,
+  GuardrailChecks,
+} from "./guardrails.js";
+export {
+  createProvider,
+  AnthropicProvider,
+  MockProvider,
+  VertexProvider,
+} from "./llm/index.js";
 export { generate, critique, validate } from "./agents.js";
 export type {
   YilsfConfig,
