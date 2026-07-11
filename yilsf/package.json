@@ -17,7 +17,9 @@
     "workflow": "tsx examples/from-jira.ts",
     "workflow:mock": "YILSF_PROVIDER=mock tsx examples/from-jira.ts",
     "review": "tsx examples/pr-review.ts",
-    "review:mock": "YILSF_PROVIDER=mock tsx examples/pr-review.ts"
+    "review:mock": "YILSF_PROVIDER=mock tsx examples/pr-review.ts",
+    "eval": "tsx eval/run-eval.ts",
+    "eval:mock": "YILSF_PROVIDER=mock tsx eval/run-eval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
