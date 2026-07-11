@@ -17,7 +17,12 @@ export {
   extractRequirementIds,
 } from "./guardrails.js";
 export type { GuardrailReport, GuardrailIssue } from "./guardrails.js";
-export { createProvider, AnthropicProvider, MockProvider } from "./llm/index.js";
+export {
+  createProvider,
+  AnthropicProvider,
+  MockProvider,
+  VertexProvider,
+} from "./llm/index.js";
 export { generate, critique, validate } from "./agents.js";
 export type {
   YilsfConfig,

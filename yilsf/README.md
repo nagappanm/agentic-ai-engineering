@@ -123,9 +123,47 @@ yilsf/
 
 ## Provider seam
 
-YILSF only needs *"prompt in, text out"* (`LLMProvider`). Two implementations
-ship: `AnthropicProvider` (real Claude — `claude-sonnet-4-6` for generation and
-critique, `claude-opus-4-8` reserved for the final stability check) and
-`MockProvider` (deterministic, offline, disciplined-on-purpose so the tests and
-demos pass without a network). Swapping in OpenAI, Azure, or a local model is a
-single new class.
+YILSF only needs *"prompt in, text out"* (`LLMProvider`). Three implementations
+ship:
+
+- **`AnthropicProvider`** — real Claude via the direct API (`claude-sonnet-4-6`
+  for generation and critique, `claude-opus-4-8` reserved for the final stability
+  check). Needs `ANTHROPIC_API_KEY`.
+- **`VertexProvider`** — Claude on **Google Vertex AI**, authenticated with **GCP
+  Application Default Credentials — no API key** (see below).
+- **`MockProvider`** — deterministic, offline, disciplined-on-purpose so the tests
+  and demos pass without a network.
+
+`createProvider()` picks one from the environment (see the table below), or you
+can pass any provider straight into `new YogaLLM(config, provider)`. Swapping in
+OpenAI, Azure, or a local model is a single new class.
+
+### Using it with Claude on Vertex AI (GCP auth, no key)
+
+If your machine already talks to Claude through Vertex (e.g. a Claude Code setup
+with `CLAUDE_CODE_USE_VERTEX=1`), YILSF reuses the **same credential chain** —
+workload identity, `gcloud auth application-default login`, or a service-account
+key in `GOOGLE_APPLICATION_CREDENTIALS`. No Anthropic API key is involved.
+
+```bash
+export YILSF_PROVIDER=vertex
+export YILSF_VERTEX_REGION=us-east5
+export YILSF_VERTEX_PROJECT_ID=my-gcp-project
+# Vertex model IDs carry an @version suffix — set them to your Model Garden ids:
+export YILSF_DEV_MODEL=claude-sonnet-4-5@20250929
+export YILSF_REASONING_MODEL=claude-opus-4-1@20250805
+npm run demo
+```
+
+> **Note:** YILSF runs as its own process — it does *not* route through a running
+> Claude Code session (Claude Code exposes no LLM endpoint for that). It just uses
+> the identical Vertex + GCP authentication path.
+
+Provider resolution, in order:
+
+| Condition                                   | Provider chosen        |
+|---------------------------------------------|------------------------|
+| `YILSF_PROVIDER=mock` \| `vertex` \| `anthropic` | that provider (explicit) |
+| unset, and `CLAUDE_CODE_USE_VERTEX=1`       | `VertexProvider`       |
+| unset, and `ANTHROPIC_API_KEY` present      | `AnthropicProvider`    |
+| none of the above                           | `MockProvider` (warns) |
