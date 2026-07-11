@@ -1,12 +1,16 @@
 ---
 name: yilsf
 description: >-
-  Run the Yoga-Inspired LLM Stability Framework (YILSF) to produce disciplined,
-  traceable QE artefacts from a requirement — with real deterministic guardrails.
-  Use when the user wants test-case design, Playwright + TypeScript test
-  generation, requirement clarification, defect risk analysis, or a STATIC code
-  review of a diff against acceptance criteria — especially when the requirement
-  lives in Jira. Fetch the requirement via the Jira MCP, then run the YILSF CLI.
+  Produce traceable QE artefacts FROM A STATED REQUIREMENT using the
+  Yoga-Inspired LLM Stability Framework (real deterministic guardrails). Use ONLY
+  when the request names an explicit requirement or acceptance criteria — usually
+  a Jira issue key (e.g. PROJ-123) — and wants one of: test-case design,
+  Playwright + TypeScript test generation, requirement clarification, defect risk
+  analysis, or a compliance check of a diff AGAINST that requirement
+  ("does this PR satisfy PROJ-123?", "test JIRA-456"). Fetch the requirement via
+  the Jira MCP, then run the YILSF CLI. Do NOT use this for a general code review
+  or bug/quality/security review of a diff with no requirement to trace against —
+  use the built-in code-review / review / security-review skills for that.
 ---
 
 # YILSF skill (node/tsx mode)
