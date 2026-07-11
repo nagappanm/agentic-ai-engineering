@@ -57,6 +57,51 @@ npm run demo
 
 ---
 
+## Run it from a Claude Code session (CLI + skill)
+
+YILSF ships a JSON CLI (`src/cli.ts`) and a Claude Code **skill**
+([`.claude/skills/yilsf/`](../.claude/skills/yilsf/SKILL.md)) so you can drive it
+from a session alongside your Jira MCP: the MCP fetches the ticket, the skill
+pipes it into the CLI, and the **real deterministic guardrails** run as code (not
+model-approximated). No connector is built into YILSF — that separation is
+deliberate.
+
+```bash
+# Requirements on stdin; one JSON object on stdout.
+echo "PROJ-123: A user can log in with valid credentials." \
+  | npm run --silent cli -- test-design
+
+# Static PR review against acceptance criteria:
+git diff origin/main...HEAD > /tmp/pr.diff
+echo "PROJ-123: Passwords must be hashed before storage." \
+  | npm run --silent cli -- code-review --diff /tmp/pr.diff --constitution code-review
+```
+
+Output shape:
+
+```jsonc
+{
+  "task": "test-design",
+  "provider": "vertex",            // which backend actually ran
+  "guardrails": {
+    "passed": true,
+    "coveredRequirements": ["PROJ-123"],
+    "uncoveredRequirements": [],
+    "issues": []
+  },
+  "final": "…the stable artefact…",
+  "trace": [ … ]                   // only with --trace
+}
+```
+
+CLI options: `--constitution <name>`, `--role "<text>"`, `--anchor "<text>"`
+(repeatable), `--diff <path>`, `--no-critique`, `--no-validation`, `--trace`,
+`--compact`. Errors and warnings go to **stderr**, so stdout stays pure JSON.
+The provider is auto-selected from the environment (`CLAUDE_CODE_USE_VERTEX=1`,
+`ANTHROPIC_API_KEY`, or `YILSF_PROVIDER=mock`).
+
+---
+
 ## Using it as a library
 
 ```ts
