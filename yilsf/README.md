@@ -80,8 +80,9 @@ console.log(result.guardrails);     // deterministic coverage/assumption report
 console.log(result.trace);          // every stage, for observability / demos
 ```
 
-`run()` accepts four task types: `requirements-analysis`, `test-design`,
-`automation-code`, and `defect-analysis` — the STLC touchpoints from the spec.
+`run()` accepts five task types: `requirements-analysis`, `test-design`,
+`automation-code`, `defect-analysis`, and `code-review` — the STLC touchpoints
+from the spec.
 
 ### One requirement → a Playwright spec, in one call
 
@@ -111,6 +112,45 @@ workflow:mock` (offline) or `npm run workflow` (real provider).
 > critique → validate → constitution) is domain-general; what's QA-specific is
 > the role, the task briefs, the guardrails, and the constitution. Retarget it to
 > code review, incident analysis, or spec authoring by swapping those.
+
+### Static code review of a PR against requirements
+
+The clearest proof it isn't QA-only: the **`code-review`** task reviews a PR diff
+against Jira acceptance criteria, with the same discipline (trace every finding
+to a requirement, don't reason about code you can't see, mark `UNKNOWN` rather
+than guess). `run()` takes the diff as an optional third argument — the *material
+under review* — separate from the requirements it's judged against.
+
+```ts
+import { YogaLLM, codeReviewConstitution } from "yilsf";
+
+const yoga = new YogaLLM({
+  role: "a meticulous senior software engineer performing a static code review.",
+  constitution: codeReviewConstitution,   // swap the constitution to retarget
+});
+
+const requirements = "PROJ-123: Passwords must be hashed before storage.";
+const diff = await gitDiff();             // git diff origin/main...HEAD
+
+const result = await yoga.run("code-review", requirements, diff);
+result.final;                             // findings, each with a verdict + severity
+result.guardrails.uncoveredRequirements;  // requirements the review never addressed
+```
+
+The scenario (positive/negative/edge) guardrail is test-specific, so it's turned
+**off** for `code-review` automatically — but coverage, assumption, and unknown
+checks stay on. See [`examples/pr-review.ts`](examples/pr-review.ts):
+
+```bash
+git diff origin/main...HEAD > /tmp/pr.diff
+npm run review -- /tmp/pr.diff     # real provider
+npm run review:mock                # offline demo
+```
+
+> The review is **static** — it reasons about the diff text, it does not run the
+> code. YILSF has no GitHub connector; you supply the diff (from `git diff` or the
+> GitHub API). Very large diffs may exceed the model's context — review per file
+> or per hunk if so.
 
 ---
 

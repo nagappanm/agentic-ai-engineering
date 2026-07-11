@@ -18,7 +18,7 @@ describe("YogaLLM pipeline (mock provider)", () => {
       "critique",
       "validate",
     ]);
-    expect(result.final).toContain("validated artefact");
+    expect(result.final).toContain("Final validated");
   });
 
   it("produces a candidate that covers every requirement", async () => {

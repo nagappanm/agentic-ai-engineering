@@ -14,8 +14,25 @@
 import { critique, generate, validate } from "./agents.js";
 import { makeConfig } from "./config.js";
 import { createProvider } from "./llm/index.js";
-import { runGuardrails, type GuardrailReport } from "./guardrails.js";
+import {
+  runGuardrails,
+  type GuardrailChecks,
+  type GuardrailReport,
+} from "./guardrails.js";
 import type { LLMProvider, Stage, TaskType, YilsfConfig } from "./types.js";
+
+/**
+ * Which guardrail checks apply per task. Coverage, assumptions, and unknowns are
+ * universal; the positive/negative/edge scenario check is meaningful only for
+ * test design, so review-style tasks turn it off. `{}` means "all checks".
+ */
+const GUARDRAILS_BY_TASK: Record<TaskType, GuardrailChecks> = {
+  "requirements-analysis": {},
+  "test-design": {},
+  "automation-code": {},
+  "defect-analysis": {},
+  "code-review": { scenarios: false },
+};
 
 /** One recorded step of the pipeline, for observability. */
 export interface TraceStep {
@@ -70,23 +87,35 @@ export class YogaLLM {
     this.provider = provider;
   }
 
-  /** Run the full discipline over a task and its requirements. */
-  async run(task: TaskType, requirements: string): Promise<YilsfResult> {
+  /**
+   * Run the full discipline over a task.
+   *
+   * @param task         which STLC/QE task to perform
+   * @param requirements the specification to trace against (guardrails key off this)
+   * @param material     optional artefact under review — e.g. a PR diff for
+   *                     `code-review`. Ignored by tasks that don't need it.
+   */
+  async run(
+    task: TaskType,
+    requirements: string,
+    material?: string,
+  ): Promise<YilsfResult> {
     const trace: TraceStep[] = [];
 
     // Dhyana — generate.
-    const draft = await generate(this.provider, this.config, task, requirements);
+    const draft = await generate(this.provider, this.config, task, requirements, material);
     trace.push({ stage: "generate", principle: PRINCIPLE.generate, output: draft });
 
     // Dhyana — critique (optional).
     let candidate = draft;
     if (this.config.enableCritique) {
-      candidate = await critique(this.provider, this.config, requirements, draft);
+      candidate = await critique(this.provider, this.config, requirements, draft, material);
       trace.push({ stage: "critique", principle: PRINCIPLE.critique, output: candidate });
     }
 
-    // Deterministic guardrails on the candidate the validator will see.
-    const guardrails = runGuardrails(candidate, requirements);
+    // Deterministic guardrails on the candidate the validator will see. The
+    // scenario check is test-specific, so tasks like code-review switch it off.
+    const guardrails = runGuardrails(candidate, requirements, GUARDRAILS_BY_TASK[task]);
 
     // Samadhi — validate (optional).
     let final = candidate;
@@ -97,6 +126,7 @@ export class YogaLLM {
         requirements,
         candidate,
         guardrails,
+        material,
       );
       trace.push({ stage: "validate", principle: PRINCIPLE.validate, output: final });
     }

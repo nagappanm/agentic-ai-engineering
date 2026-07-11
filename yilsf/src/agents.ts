@@ -22,10 +22,13 @@ export async function generate(
   config: YilsfConfig,
   task: TaskType,
   requirements: string,
+  material?: string,
 ): Promise<string> {
   return provider.complete({
     system: systemPrompt(config),
-    messages: [{ role: "user", content: generatePrompt(config, task, requirements) }],
+    messages: [
+      { role: "user", content: generatePrompt(config, task, requirements, material) },
+    ],
     model: config.devModel,
     maxTokens: config.maxTokens,
     temperature: config.temperature,
@@ -38,11 +41,12 @@ export async function critique(
   config: YilsfConfig,
   requirements: string,
   draft: string,
+  material?: string,
 ): Promise<string> {
   return provider.complete({
     system: systemPrompt(config),
     messages: [
-      { role: "user", content: critiquePrompt(config, requirements, draft) },
+      { role: "user", content: critiquePrompt(config, requirements, draft, material) },
     ],
     model: config.devModel,
     maxTokens: config.maxTokens,
@@ -60,13 +64,14 @@ export async function validate(
   requirements: string,
   candidate: string,
   report: GuardrailReport,
+  material?: string,
 ): Promise<string> {
   return provider.complete({
     system: systemPrompt(config),
     messages: [
       {
         role: "user",
-        content: validatePrompt(config, requirements, candidate, report),
+        content: validatePrompt(config, requirements, candidate, report, material),
       },
     ],
     model: config.reasoningModel,

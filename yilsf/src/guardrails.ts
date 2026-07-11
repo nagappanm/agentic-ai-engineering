@@ -112,28 +112,52 @@ function detectScenarioGaps(artefact: string): GuardrailIssue[] {
 }
 
 /**
- * Run every guardrail over an artefact, given the requirements it should trace
- * back to. Pure and deterministic: same inputs always give the same report.
+ * Which checks to run. Some are universal (coverage, assumptions, unknowns);
+ * the scenario check is test-design-specific, so tasks like code-review turn it
+ * off. Omitted flags default to on.
+ */
+export interface GuardrailChecks {
+  coverage?: boolean;
+  assumptions?: boolean;
+  unknowns?: boolean;
+  scenarios?: boolean;
+}
+
+const ALL_CHECKS: Required<GuardrailChecks> = {
+  coverage: true,
+  assumptions: true,
+  unknowns: true,
+  scenarios: true,
+};
+
+/**
+ * Run the selected guardrails over an artefact, given the requirements it should
+ * trace back to. Pure and deterministic: same inputs always give the same report.
  */
 export function runGuardrails(
   artefact: string,
   requirements: string,
+  checks: GuardrailChecks = {},
 ): GuardrailReport {
+  const on = { ...ALL_CHECKS, ...checks };
   const required = extractRequirementIds(requirements);
   const covered = extractRequirementIds(artefact).filter((id) =>
     required.includes(id),
   );
   const uncovered = required.filter((id) => !covered.includes(id));
 
-  const issues: GuardrailIssue[] = [
-    ...detectAssumptions(artefact),
-    ...detectUnhandledUnknowns(artefact),
-    ...detectScenarioGaps(artefact),
-    ...uncovered.map((id) => ({
-      kind: "missing-coverage" as const,
-      message: `Requirement ${id} is not referenced by any part of the artefact.`,
-    })),
-  ];
+  const issues: GuardrailIssue[] = [];
+  if (on.assumptions) issues.push(...detectAssumptions(artefact));
+  if (on.unknowns) issues.push(...detectUnhandledUnknowns(artefact));
+  if (on.scenarios) issues.push(...detectScenarioGaps(artefact));
+  if (on.coverage) {
+    issues.push(
+      ...uncovered.map((id) => ({
+        kind: "missing-coverage" as const,
+        message: `Requirement ${id} is not referenced by any part of the artefact.`,
+      })),
+    );
+  }
 
   return {
     passed: issues.length === 0,

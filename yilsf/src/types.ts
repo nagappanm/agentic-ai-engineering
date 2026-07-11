@@ -17,7 +17,8 @@ export type TaskType =
   | "requirements-analysis"
   | "test-design"
   | "automation-code"
-  | "defect-analysis";
+  | "defect-analysis"
+  | "code-review";
 
 /** The three cognitive stages a request passes through. */
 export type Stage = "generate" | "critique" | "validate";

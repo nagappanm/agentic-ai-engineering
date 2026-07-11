@@ -166,9 +166,19 @@ settling.
 | `test-design`           | High-quality, traceable test cases      | case list → coverage/assumption check → final test set    |
 | `automation-code`       | Stable, non-hallucinated Playwright/TS  | spec skeletons → selector/flakiness review → final code   |
 | `defect-analysis`       | Risk-based prioritisation               | cluster by area/risk → challenge → focus areas            |
+| `code-review`           | PR diff vs. requirements (static)       | per-requirement verdict → challenge → stable findings     |
 
 Test design and automation compose naturally: validate the test cases first, then
 feed the stable set into an `automation-code` run.
+
+**`code-review` — beyond QA.** `run("code-review", requirements, diff)` takes a
+second artefact (the diff, as *material under review*) and judges it against the
+requirements: an explicit satisfied / partially / not-addressed verdict per
+requirement ID, plus scope-creep and missing-error-handling flags. It reuses the
+whole stability core; only the role, the `codeReviewConstitution`, and the
+guardrail selection (the test-only scenario check is switched off) differ. This
+is the framework's clearest demonstration that the discipline is domain-general,
+not QA-specific.
 
 ---
 

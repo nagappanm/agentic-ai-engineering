@@ -15,13 +15,18 @@ export {
   constitutions,
   genericQeConstitution,
   bankingConstitution,
+  codeReviewConstitution,
 } from "./constitutions.js";
 export {
   runGuardrails,
   formatReport,
   extractRequirementIds,
 } from "./guardrails.js";
-export type { GuardrailReport, GuardrailIssue } from "./guardrails.js";
+export type {
+  GuardrailReport,
+  GuardrailIssue,
+  GuardrailChecks,
+} from "./guardrails.js";
 export {
   createProvider,
   AnthropicProvider,

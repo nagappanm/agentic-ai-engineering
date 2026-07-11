@@ -14,7 +14,9 @@
     "demo": "tsx examples/login-testcases.ts",
     "demo:mock": "YILSF_PROVIDER=mock tsx examples/login-testcases.ts",
     "workflow": "tsx examples/from-jira.ts",
-    "workflow:mock": "YILSF_PROVIDER=mock tsx examples/from-jira.ts"
+    "workflow:mock": "YILSF_PROVIDER=mock tsx examples/from-jira.ts",
+    "review": "tsx examples/pr-review.ts",
+    "review:mock": "YILSF_PROVIDER=mock tsx examples/pr-review.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
