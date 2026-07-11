@@ -26,6 +26,46 @@ function isCodeReview(params: LLMCompleteParams): boolean {
   return params.messages.some((m) => /Material under review:/.test(m.content));
 }
 
+/** Detect a structured-output directive, if any. */
+function structuredMode(params: LLMCompleteParams): "test" | "review" | null {
+  const text = params.messages.map((m) => m.content).join("\n");
+  if (/JSON array of test cases/.test(text)) return "test";
+  if (/JSON array of findings/.test(text)) return "review";
+  return null;
+}
+
+/** Emit a schema-valid JSON test suite (3 cases per requirement). */
+function jsonTestCases(requirementIds: string[]): string {
+  const ids = requirementIds.length > 0 ? requirementIds : ["REQ-000"];
+  const scenarios = ["positive", "negative", "edge"] as const;
+  const cases = ids.flatMap((id) =>
+    scenarios.map((scenario, i) => ({
+      id: `TC-${id}-${i + 1}`,
+      title: `${scenario} path for ${id}`,
+      scenario,
+      preconditions: [`system available for ${id}`],
+      steps: [`exercise ${scenario} path of ${id}`],
+      expectedResults: [`${scenario} outcome for ${id}`],
+      risk: scenario === "edge" ? "medium" : "high",
+      traceability: [id],
+    })),
+  );
+  return JSON.stringify(cases, null, 2);
+}
+
+/** Emit a schema-valid JSON review (one finding per requirement). */
+function jsonFindings(requirementIds: string[]): string {
+  const ids = requirementIds.length > 0 ? requirementIds : ["REQ-000"];
+  const findings = ids.map((id, i) => ({
+    id: `F-${String(i + 1).padStart(3, "0")}`,
+    requirementId: id,
+    verdict: "satisfied",
+    severity: "low",
+    evidence: `see diff for ${id}`,
+  }));
+  return JSON.stringify(findings, null, 2);
+}
+
 /** Build a guardrail-clean review-findings block covering each requirement. */
 function findingsFor(requirementIds: string[]): string {
   const ids = requirementIds.length > 0 ? requirementIds : ["REQ-000"];
@@ -60,6 +100,11 @@ export class MockProvider implements LLMProvider {
     const stage = detectStage(params);
     const lastUser = [...params.messages].reverse().find((m) => m.role === "user");
     const ids = extractRequirementIds(lastUser?.content ?? "");
+
+    // Structured mode: emit schema-valid JSON only (no prose to parse around).
+    const structured = structuredMode(params);
+    if (structured === "test") return jsonTestCases(ids);
+    if (structured === "review") return jsonFindings(ids);
 
     // Code review produces findings; every other task produces test cases.
     const review = isCodeReview(params);

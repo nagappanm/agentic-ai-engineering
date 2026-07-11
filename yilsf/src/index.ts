@@ -9,7 +9,26 @@ export type {
   TraceStep,
   WorkflowOptions,
   WorkflowResult,
+  StructuredRunResult,
 } from "./pipeline.js";
+export {
+  testCaseSchema,
+  testSuiteSchema,
+  findingSchema,
+  reviewSchema,
+  SCHEMAS,
+  isStructuredTask,
+} from "./schema.js";
+export type {
+  TestCase,
+  Finding,
+  StructuredTask,
+} from "./schema.js";
+export {
+  parseStructured,
+  structuredInstruction,
+} from "./structured.js";
+export type { StructuredResult } from "./structured.js";
 export { makeConfig, DEV_MODEL, REASONING_MODEL } from "./config.js";
 export {
   constitutions,

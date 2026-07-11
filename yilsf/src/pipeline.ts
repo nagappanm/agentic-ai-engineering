@@ -19,6 +19,12 @@ import {
   type GuardrailChecks,
   type GuardrailReport,
 } from "./guardrails.js";
+import { SCHEMAS, isStructuredTask, type StructuredTask } from "./schema.js";
+import {
+  parseStructured,
+  structuredInstruction,
+  type StructuredResult,
+} from "./structured.js";
 import type { LLMProvider, Stage, TaskType, YilsfConfig } from "./types.js";
 
 /**
@@ -48,6 +54,11 @@ export interface YilsfResult {
   /** Guardrail report on the *pre-validation* candidate (what the validator saw). */
   guardrails: GuardrailReport;
   trace: TraceStep[];
+}
+
+/** A run whose final artefact was parsed and validated against a schema. */
+export interface StructuredRunResult extends YilsfResult {
+  structured: StructuredResult;
 }
 
 /** Options for the end-to-end requirement → Playwright spec workflow. */
@@ -100,16 +111,63 @@ export class YogaLLM {
     requirements: string,
     material?: string,
   ): Promise<YilsfResult> {
+    return this.runInternal(task, requirements, material);
+  }
+
+  /**
+   * Like {@link run}, but steers the model to emit a validated JSON artefact
+   * (a test suite for `test-design`, a review for `code-review`) and parses it.
+   * The returned `structured` field carries the typed data plus a validity flag
+   * and any schema errors — turning "did the model produce well-formed output?"
+   * into a deterministic signal.
+   */
+  async runStructured(
+    task: StructuredTask,
+    requirements: string,
+    material?: string,
+  ): Promise<StructuredRunResult> {
+    if (!isStructuredTask(task)) {
+      throw new Error(
+        `Structured output is not supported for "${task}". ` +
+          `Supported: ${Object.keys(SCHEMAS).join(", ")}.`,
+      );
+    }
+    const directive = structuredInstruction(task);
+    const result = await this.runInternal(task, requirements, material, directive);
+    return { ...result, structured: parseStructured(task, result.final) };
+  }
+
+  /** Shared pipeline body; `formatDirective` opts into structured output. */
+  private async runInternal(
+    task: TaskType,
+    requirements: string,
+    material?: string,
+    formatDirective?: string,
+  ): Promise<YilsfResult> {
     const trace: TraceStep[] = [];
 
     // Dhyana — generate.
-    const draft = await generate(this.provider, this.config, task, requirements, material);
+    const draft = await generate(
+      this.provider,
+      this.config,
+      task,
+      requirements,
+      material,
+      formatDirective,
+    );
     trace.push({ stage: "generate", principle: PRINCIPLE.generate, output: draft });
 
     // Dhyana — critique (optional).
     let candidate = draft;
     if (this.config.enableCritique) {
-      candidate = await critique(this.provider, this.config, requirements, draft, material);
+      candidate = await critique(
+        this.provider,
+        this.config,
+        requirements,
+        draft,
+        material,
+        formatDirective,
+      );
       trace.push({ stage: "critique", principle: PRINCIPLE.critique, output: candidate });
     }
 
@@ -127,6 +185,7 @@ export class YogaLLM {
         candidate,
         guardrails,
         material,
+        formatDirective,
       );
       trace.push({ stage: "validate", principle: PRINCIPLE.validate, output: final });
     }

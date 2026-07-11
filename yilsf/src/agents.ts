@@ -23,11 +23,15 @@ export async function generate(
   task: TaskType,
   requirements: string,
   material?: string,
+  formatDirective?: string,
 ): Promise<string> {
   return provider.complete({
     system: systemPrompt(config),
     messages: [
-      { role: "user", content: generatePrompt(config, task, requirements, material) },
+      {
+        role: "user",
+        content: generatePrompt(config, task, requirements, material, formatDirective),
+      },
     ],
     model: config.devModel,
     maxTokens: config.maxTokens,
@@ -42,11 +46,15 @@ export async function critique(
   requirements: string,
   draft: string,
   material?: string,
+  formatDirective?: string,
 ): Promise<string> {
   return provider.complete({
     system: systemPrompt(config),
     messages: [
-      { role: "user", content: critiquePrompt(config, requirements, draft, material) },
+      {
+        role: "user",
+        content: critiquePrompt(config, requirements, draft, material, formatDirective),
+      },
     ],
     model: config.devModel,
     maxTokens: config.maxTokens,
@@ -65,13 +73,21 @@ export async function validate(
   candidate: string,
   report: GuardrailReport,
   material?: string,
+  formatDirective?: string,
 ): Promise<string> {
   return provider.complete({
     system: systemPrompt(config),
     messages: [
       {
         role: "user",
-        content: validatePrompt(config, requirements, candidate, report, material),
+        content: validatePrompt(
+          config,
+          requirements,
+          candidate,
+          report,
+          material,
+          formatDirective,
+        ),
       },
     ],
     model: config.reasoningModel,
