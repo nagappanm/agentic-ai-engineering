@@ -38,6 +38,14 @@ things up, and can prove how good it is.
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the detailed build plan, and
 [`docs/`](docs/) for the learning notes written alongside each module.
 
+> **Companion project — [`yilsf/`](yilsf/):** the **Yoga-Inspired LLM Stability
+> Framework**, a standalone TypeScript project that wraps an LLM in a
+> cognitive-discipline layer (prune context → focus → generate → self-critique →
+> validate) so it behaves like a calm, precise QE partner for Playwright +
+> TypeScript. Includes a runnable generate→critique→validate pipeline, deterministic
+> guardrails, an offline demo, and a [framework spec](yilsf/docs/framework.md),
+> [visual model](yilsf/docs/visual-model.md), and [talk outline](yilsf/docs/talk-outline.md).
+
 ---
 
 ## Architecture (current)
@@ -96,7 +104,8 @@ agentic-ai-engineering/
 ├── docs/
 │   ├── ROADMAP.md            # the 8-module build plan
 │   └── module-01.md          # learning notes for Module 1
-└── tests/                    # fast, offline unit tests
+├── tests/                    # fast, offline unit tests
+└── yilsf/                    # companion: Yoga-Inspired LLM Stability Framework (TypeScript)
 ```
 
 ---
