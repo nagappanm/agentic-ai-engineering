@@ -83,6 +83,35 @@ console.log(result.trace);          // every stage, for observability / demos
 `run()` accepts four task types: `requirements-analysis`, `test-design`,
 `automation-code`, and `defect-analysis` — the STLC touchpoints from the spec.
 
+### One requirement → a Playwright spec, in one call
+
+`runWorkflow()` chains the STLC steps for you: `requirements-analysis` →
+`test-design` → `automation-code`. The data flow is deliberate — analysis and
+test design work from the *original* requirement (so cases trace to it), while
+automation-code consumes the *validated* test cases from the design stage.
+
+```ts
+const result = await yoga.runWorkflow(requirement, {
+  includeAnalysis: true,                    // clarify first (default true)
+  writeSpecTo: "generated/proj-123.spec.ts", // write the Playwright spec to disk
+});
+
+result.analysis?.final   // clarification questions to send back to the ticket
+result.design.final      // validated, traceable test cases
+result.automation.final  // the Playwright + TypeScript spec
+result.specPath          // where it was written
+```
+
+Because a Jira issue key (`PROJ-123`) already matches YILSF's requirement-ID
+pattern, every generated test case traces straight back to the ticket. See
+[`examples/from-jira.ts`](examples/from-jira.ts) — run it with `npm run
+workflow:mock` (offline) or `npm run workflow` (real provider).
+
+> **Note — this is not QA-only.** The stability core (prune → focus → generate →
+> critique → validate → constitution) is domain-general; what's QA-specific is
+> the role, the task briefs, the guardrails, and the constitution. Retarget it to
+> code review, incident analysis, or spec authoring by swapping those.
+
 ---
 
 ## What makes the output *stable*

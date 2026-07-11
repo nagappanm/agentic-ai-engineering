@@ -4,7 +4,12 @@
  */
 
 export { YogaLLM } from "./pipeline.js";
-export type { YilsfResult, TraceStep } from "./pipeline.js";
+export type {
+  YilsfResult,
+  TraceStep,
+  WorkflowOptions,
+  WorkflowResult,
+} from "./pipeline.js";
 export { makeConfig, DEV_MODEL, REASONING_MODEL } from "./config.js";
 export {
   constitutions,

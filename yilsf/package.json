@@ -12,7 +12,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "demo": "tsx examples/login-testcases.ts",
-    "demo:mock": "YILSF_PROVIDER=mock tsx examples/login-testcases.ts"
+    "demo:mock": "YILSF_PROVIDER=mock tsx examples/login-testcases.ts",
+    "workflow": "tsx examples/from-jira.ts",
+    "workflow:mock": "YILSF_PROVIDER=mock tsx examples/from-jira.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",

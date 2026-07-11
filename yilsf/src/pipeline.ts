@@ -33,6 +33,25 @@ export interface YilsfResult {
   trace: TraceStep[];
 }
 
+/** Options for the end-to-end requirement → Playwright spec workflow. */
+export interface WorkflowOptions {
+  /** Run the clarifying requirements-analysis pass first. Default: true. */
+  includeAnalysis?: boolean;
+  /** If set, write the final automation spec to this path (dirs are created). */
+  writeSpecTo?: string;
+}
+
+/** The result of a full workflow run — every stage kept, for traceability. */
+export interface WorkflowResult {
+  requirement: string;
+  /** Present unless includeAnalysis was false. */
+  analysis?: YilsfResult;
+  design: YilsfResult;
+  automation: YilsfResult;
+  /** Set when writeSpecTo was provided and the file was written. */
+  specPath?: string;
+}
+
 const PRINCIPLE: Record<Stage, string> = {
   generate: "Dhyana (sustained flow) — produce the first artefact",
   critique: "Dhyana (self-awareness) — observe and refine",
@@ -83,5 +102,39 @@ export class YogaLLM {
     }
 
     return { task, final, guardrails, trace };
+  }
+
+  /**
+   * The full STLC chain for one requirement:
+   *   requirements-analysis  ->  test-design  ->  automation-code
+   *
+   * The data flow is deliberate, not a blind pipe: analysis and test-design
+   * both work from the *original* requirement (so cases trace to it), while
+   * automation-code consumes the *validated* test cases from the design stage.
+   * Optionally writes the generated Playwright spec to disk.
+   */
+  async runWorkflow(
+    requirement: string,
+    options: WorkflowOptions = {},
+  ): Promise<WorkflowResult> {
+    const includeAnalysis = options.includeAnalysis ?? true;
+
+    const analysis = includeAnalysis
+      ? await this.run("requirements-analysis", requirement)
+      : undefined;
+    const design = await this.run("test-design", requirement);
+    const automation = await this.run("automation-code", design.final);
+
+    let specPath: string | undefined;
+    if (options.writeSpecTo) {
+      // Imported lazily so the core stays usable outside a Node filesystem.
+      const { writeFile, mkdir } = await import("node:fs/promises");
+      const { dirname } = await import("node:path");
+      await mkdir(dirname(options.writeSpecTo), { recursive: true });
+      await writeFile(options.writeSpecTo, automation.final, "utf8");
+      specPath = options.writeSpecTo;
+    }
+
+    return { requirement, analysis, design, automation, specPath };
   }
 }
