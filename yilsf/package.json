@@ -1,0 +1,27 @@
+{
+  "name": "yilsf",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Yoga-Inspired LLM Stability Framework — a cognitive-discipline layer that makes an LLM behave like a calm, precise QE partner (Playwright + TypeScript).",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "demo": "tsx examples/login-testcases.ts",
+    "demo:mock": "YILSF_PROVIDER=mock tsx examples/login-testcases.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.1",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}
