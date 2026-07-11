@@ -215,6 +215,38 @@ npm run review:mock                # offline demo
 
 ---
 
+## Proving it works — the eval harness
+
+Claims are cheap; the [`eval/`](eval/README.md) harness measures them. It runs a
+controlled A/B — **baseline** (one raw LLM call) vs **YILSF** (full pipeline) — on
+the same 10-requirement golden set, same model, same temperature, so the only
+variable is the discipline layer.
+
+```bash
+npm run eval:mock    # offline, deterministic illustration
+npm run eval         # real provider — the numbers that count
+```
+
+Three of the golden requirements are deliberately under-specified. The headline
+metric is **flag-vs-invent**: a raw call invents a value for the gap, a
+disciplined run flags it `UNKNOWN`. The offline illustration:
+
+```
+Metric                            baseline        YILSF           better
+Coverage %                        100             100             tie
+Edge-case recall %                0               70              YILSF
+Ambiguities flagged (/3)          0               3               YILSF
+Ambiguities invented (/3)         3               0               YILSF
+Assumption/hedging count          7               0               YILSF
+```
+
+**Read the caveat in [`eval/README.md`](eval/README.md):** coverage/assumptions
+are framework-adjacent (the validator optimises toward them), so the *decisive*
+evidence is the independent metrics — edge-case recall, flag-vs-invent, and
+hallucinated refs — plus lower variance across runs (`YILSF_EVAL_RUNS>1`).
+
+---
+
 ## Project structure
 
 ```
@@ -227,8 +259,10 @@ yilsf/
 │   ├── guardrails.ts     # deterministic, LLM-free stability checks
 │   ├── agents.ts         # generate / critique / validate
 │   ├── pipeline.ts       # YogaLLM orchestrator + trace
-│   └── llm/              # provider seam: Anthropic (real) + Mock (offline)
-├── examples/login-testcases.ts
+│   ├── cli.ts            # JSON CLI the Claude Code skill drives
+│   └── llm/              # provider seam: Anthropic, Vertex, Mock
+├── examples/             # login test design, Jira workflow, PR review
+├── eval/                 # A/B harness: baseline vs YILSF on a golden set
 ├── tests/                # vitest, fully offline via the mock provider
 └── docs/                 # framework spec, visual model, talk outline
 ```
