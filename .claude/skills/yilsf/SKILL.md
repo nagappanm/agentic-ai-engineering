@@ -69,12 +69,19 @@ the requirement from Jira via the Jira MCP**, and **presenting the result**.
 
    Options: `--constitution generic-qe|banking|code-review`, `--role "<text>"`,
    `--anchor "<text>"` (repeatable), `--no-critique`, `--no-validation`,
-   `--trace` (include per-stage trace), `--diff <path>` (code-review only).
+   `--trace` (include per-stage trace), `--diff <path>` (code-review only),
+   `--structured` (test-design & code-review only — see below).
 
-   - For **code-review**, first get the diff (`git diff origin/main...HEAD > /tmp/pr.diff`,
-     or the diff from the PR the user named), then add
-     `--diff /tmp/pr.diff --constitution code-review` and a review-oriented
-     `--role`.
+   - For **code-review**, first get the diff. Prefer the **GitHub MCP** to fetch
+     the PR diff when the user names a PR; otherwise `git diff origin/main...HEAD
+     > /tmp/pr.diff`. Then add `--diff /tmp/pr.diff --constitution code-review`
+     and a review-oriented `--role`.
+
+   - Add **`--structured`** when you need machine-usable output (to write test
+     files, build a table, or post structured findings). The CLI then emits
+     validated JSON: `data` (a typed test suite or review), `schemaValid`, and
+     `schemaErrors`. If `schemaValid` is false, report the errors — do not
+     silently use partial data.
 
 4. **Parse the JSON** from stdout. Shape:
 
@@ -93,14 +100,22 @@ the requirement from Jira via the Jira MCP**, and **presenting the result**.
    }
    ```
 
-5. **Present the result.** Lead with `final`. Then surface, prominently:
+5. **Present the result.** Lead with `final` (or `data` when `--structured`).
+   Then surface, prominently:
    - any `uncoveredRequirements` (gaps the artefact missed),
    - every guardrail `issue`,
-   - any `UNKNOWN` markers in `final` — these are questions to send **back to
-     Jira**, not things to guess. Never fill them in yourself.
+   - any `UNKNOWN` markers / `unknowns` — these are questions, not things to guess.
 
-   If `guardrails.passed` is false, do not present the output as final — report
-   the issues and offer to re-run or clarify.
+   If `guardrails.passed` (or `schemaValid`) is false, do not present the output
+   as final — report the issues and offer to re-run or clarify.
+
+6. **Write back via MCP (ask first).** The clarification questions and UNKNOWNs
+   belong on the ticket. Offer to post them back to Jira **using the Jira MCP**
+   (e.g. add a comment listing the questions, or create sub-tasks) — this is the
+   other half of the connector-free design: the same MCP that fetched the issue
+   writes the follow-up. For a PR review, similarly offer to post the findings
+   back as a **GitHub** review/comment via the GitHub MCP. Always confirm with the
+   user before writing to Jira or GitHub — never post automatically.
 
 ## Provider / auth
 
@@ -113,6 +128,6 @@ Confirm the JSON's `provider` field matches what the user expects.
 
 - The review/analysis is **static** — YILSF reasons about text; it does not run
   code or tests. Running Playwright is a separate step the user drives.
-- YILSF has **no Jira or GitHub connector** — the session supplies requirement
-  text (Jira MCP) and diffs (`git`/GitHub). That separation is intentional.
+- YILSF has **no Jira or GitHub connector by design** — the session's Jira/GitHub
+  MCP does all fetching *and* write-back. YILSF only supplies the discipline.
 - Very large diffs may exceed the model's context — review per file or per hunk.

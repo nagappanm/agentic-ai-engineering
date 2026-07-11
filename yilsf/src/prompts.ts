@@ -32,6 +32,12 @@ function materialSection(material?: string): string[] {
   return ["", "Material under review:", material];
 }
 
+/** Render a strict output-format directive (e.g. a JSON schema), when present. */
+function formatSection(directive?: string): string[] {
+  if (!directive) return [];
+  return ["", "Output format (STRICT — follow exactly):", directive];
+}
+
 /**
  * Pratyahara — withdrawal of noise. Build the smallest possible context block:
  * only the role's anchors, the constitution, and the artefacts for this task.
@@ -67,6 +73,7 @@ export function generatePrompt(
   task: TaskType,
   requirements: string,
   material?: string,
+  formatDirective?: string,
 ): string {
   return [
     buildContext(config),
@@ -76,6 +83,7 @@ export function generatePrompt(
     "Requirements:",
     requirements,
     ...materialSection(material),
+    ...formatSection(formatDirective),
   ].join("\n");
 }
 
@@ -85,6 +93,7 @@ export function critiquePrompt(
   requirements: string,
   draft: string,
   material?: string,
+  formatDirective?: string,
 ): string {
   return [
     "You are now a critical reviewer of your own work. Be adversarial but fair.",
@@ -103,6 +112,11 @@ export function critiquePrompt(
     "2. List missing edge cases and uncovered requirement IDs.",
     "3. List any mismatch with the requirements or the constitution.",
     "4. Then output a REFINED version that fixes what you found. Mark anything still unresolved as UNKNOWN.",
+    ...formatSection(
+      formatDirective
+        ? `${formatDirective}\nThe REFINED version must obey this format.`
+        : undefined,
+    ),
   ].join("\n");
 }
 
@@ -117,6 +131,7 @@ export function validatePrompt(
   candidate: string,
   report: GuardrailReport,
   material?: string,
+  formatDirective?: string,
 ): string {
   return [
     "You are the validator. Your job is to produce the final, stable artefact.",
@@ -137,6 +152,9 @@ export function validatePrompt(
     "- Resolve every guardrail issue above.",
     "- Do not patch silently: keep a short 'Resolved issues' note listing what you changed.",
     "- Anything you genuinely cannot resolve from the requirements must stay marked UNKNOWN with a clarification request.",
-    "- Output the final artefact only after the fixes.",
+    formatDirective
+      ? "- Output ONLY the final artefact in the required format below (no 'Resolved issues' prose)."
+      : "- Output the final artefact only after the fixes.",
+    ...formatSection(formatDirective),
   ].join("\n");
 }

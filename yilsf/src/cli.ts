@@ -27,8 +27,12 @@ import {
   YogaLLM,
   constitutions,
   createProvider,
+  isStructuredTask,
+  SCHEMAS,
+  type StructuredResult,
   type TaskType,
   type YilsfConfig,
+  type YilsfResult,
 } from "./index.js";
 
 const TASKS: TaskType[] = [
@@ -50,6 +54,7 @@ interface Args {
   validation: boolean;
   trace: boolean;
   pretty: boolean;
+  structured: boolean;
 }
 
 function fail(message: string): never {
@@ -64,6 +69,7 @@ function parseArgs(argv: string[]): Args {
     validation: true,
     trace: false,
     pretty: true,
+    structured: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -91,6 +97,9 @@ function parseArgs(argv: string[]): Args {
         break;
       case "--trace":
         args.trace = true;
+        break;
+      case "--structured":
+        args.structured = true;
         break;
       case "--compact":
         args.pretty = false;
@@ -146,15 +155,37 @@ async function main(): Promise<void> {
     overrides.constitution = c;
   }
 
+  if (args.structured && !isStructuredTask(args.task)) {
+    fail(
+      `--structured is only supported for: ${Object.keys(SCHEMAS).join(", ")}.`,
+    );
+  }
+
   // Build the provider explicitly so we can report which one ran.
   const provider = createProvider();
   const yoga = new YogaLLM(overrides, provider);
-  const result = await yoga.run(args.task, requirements, material);
+
+  let structured: StructuredResult | undefined;
+  let result: YilsfResult;
+  if (args.structured && isStructuredTask(args.task)) {
+    const r = await yoga.runStructured(args.task, requirements, material);
+    structured = r.structured;
+    result = r;
+  } else {
+    result = await yoga.run(args.task, requirements, material);
+  }
 
   const output = {
     task: result.task,
     provider: provider.name,
     guardrails: result.guardrails,
+    ...(structured
+      ? {
+          schemaValid: structured.valid,
+          schemaErrors: structured.errors,
+          data: structured.data,
+        }
+      : {}),
     final: result.final,
     ...(args.trace ? { trace: result.trace } : {}),
   };

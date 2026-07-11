@@ -28,8 +28,10 @@ run, and demoed (e.g. a TestMu talk), not just described.
 | **Yamas / Niyamas** (discipline) | A domain constitution of never-rules | `constitutions.ts` |
 
 See [`docs/framework.md`](docs/framework.md) for the full spec,
-[`docs/visual-model.md`](docs/visual-model.md) for the one-page picture, and
-[`docs/talk-outline.md`](docs/talk-outline.md) for the talk.
+[`docs/visual-model.md`](docs/visual-model.md) for the one-page picture,
+[`docs/one-pager.md`](docs/one-pager.md) for the slide-ready summary, and
+[`docs/talk-outline.md`](docs/talk-outline.md) + [`docs/demo-runbook.md`](docs/demo-runbook.md)
+for the talk and its rehearsed live demo.
 
 ---
 
@@ -95,10 +97,35 @@ Output shape:
 ```
 
 CLI options: `--constitution <name>`, `--role "<text>"`, `--anchor "<text>"`
-(repeatable), `--diff <path>`, `--no-critique`, `--no-validation`, `--trace`,
-`--compact`. Errors and warnings go to **stderr**, so stdout stays pure JSON.
-The provider is auto-selected from the environment (`CLAUDE_CODE_USE_VERTEX=1`,
-`ANTHROPIC_API_KEY`, or `YILSF_PROVIDER=mock`).
+(repeatable), `--diff <path>`, `--structured`, `--no-critique`,
+`--no-validation`, `--trace`, `--compact`. Errors and warnings go to **stderr**,
+so stdout stays pure JSON. The provider is auto-selected from the environment
+(`CLAUDE_CODE_USE_VERTEX=1`, `ANTHROPIC_API_KEY`, or `YILSF_PROVIDER=mock`).
+
+---
+
+## Structured output (validated JSON artefacts)
+
+Free text is easy to emit but hard to guard and automate. For `test-design` and
+`code-review`, `runStructured()` steers the model to emit JSON and then
+**parses + validates it against a Zod schema** — so "did it produce well-formed
+output?" becomes a hard signal, not a hope.
+
+```ts
+const result = await yoga.runStructured("test-design", requirements);
+
+result.structured.valid    // did it satisfy the schema?
+result.structured.errors   // schema/parse errors, if not
+result.structured.data     // TestCase[] — typed, every case traces to a requirement
+```
+
+A `TestCase` has `id`, `title`, `scenario` (positive|negative|edge),
+`preconditions`, `steps`, `expectedResults`, `risk`, `traceability` (requirement
+IDs), and `unknowns` — the place a disciplined run parks what the requirement
+didn't specify, instead of inventing it. `code-review` yields `Finding[]` (a
+`verdict` + `severity` + `evidence` per requirement). From the CLI, add
+`--structured` to get `data`, `schemaValid`, and `schemaErrors` in the JSON
+envelope.
 
 ---
 
@@ -258,13 +285,15 @@ yilsf/
 │   ├── prompts.ts        # the "mental scripts" for each stage
 │   ├── guardrails.ts     # deterministic, LLM-free stability checks
 │   ├── agents.ts         # generate / critique / validate
-│   ├── pipeline.ts       # YogaLLM orchestrator + trace
+│   ├── pipeline.ts       # YogaLLM orchestrator + trace + runStructured
+│   ├── schema.ts         # Zod schemas for test suites / reviews
+│   ├── structured.ts     # JSON directive + parse/validate
 │   ├── cli.ts            # JSON CLI the Claude Code skill drives
 │   └── llm/              # provider seam: Anthropic, Vertex, Mock
 ├── examples/             # login test design, Jira workflow, PR review
 ├── eval/                 # A/B harness: baseline vs YILSF on a golden set
 ├── tests/                # vitest, fully offline via the mock provider
-└── docs/                 # framework spec, visual model, talk outline
+└── docs/                 # spec, visual model, one-pager, talk + demo runbook
 ```
 
 ---
