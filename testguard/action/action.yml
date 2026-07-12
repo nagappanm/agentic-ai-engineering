@@ -1,0 +1,48 @@
+name: "testguard"
+description: "Flag untrustworthy AI-generated Playwright + TypeScript tests before they land."
+branding:
+  icon: "shield"
+  color: "purple"
+
+inputs:
+  globs:
+    description: "Glob(s) / dir(s) / file(s) of test files to check."
+    required: false
+    default: "tests"
+  threshold:
+    description: "Minimum trust score (0-100) required to pass."
+    required: false
+    default: "70"
+  requirements:
+    description: "Requirements file for traceability (optional)."
+    required: false
+    default: ""
+  require-traceability:
+    description: "Fail tests that carry no requirement tag (TG008)."
+    required: false
+    default: "false"
+  working-directory:
+    description: "Directory to run in."
+    required: false
+    default: "."
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+
+    - name: Run testguard
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        TG="${{ github.action_path }}/.."
+        # Install the guard's own deps (once, in its own dir).
+        ( cd "$TG" && npm ci --silent 2>/dev/null || npm install --silent )
+        ARGS=( ${{ inputs.globs }} --threshold "${{ inputs.threshold }}" )
+        if [ -n "${{ inputs.requirements }}" ]; then ARGS+=( --requirements "${{ inputs.requirements }}" ); fi
+        if [ "${{ inputs.require-traceability }}" = "true" ]; then ARGS+=( --require-traceability ); fi
+        node "$TG/node_modules/.bin/tsx" "$TG/src/cli.ts" "${ARGS[@]}"
