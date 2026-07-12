@@ -3,6 +3,9 @@
 Tracks execution of `SPEC.md`. Check items off as they land. Each milestone ends
 green (typecheck + tests pass) before the next begins.
 
+**Status:** v1 complete — M0–M8 done. 33 tests green; benchmark at 100% recall /
+0 false positives; dynamic selector verification verified against a live browser.
+
 ---
 
 ## M0 — Scaffold
