@@ -1,0 +1,31 @@
+{
+  "name": "testguard",
+  "version": "0.0.1",
+  "private": true,
+  "description": "A CI guard that flags untrustworthy AI-generated Playwright + TypeScript tests before they land.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "testguard": "src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cli": "tsx src/cli.ts",
+    "benchmark": "tsx benchmark/run.ts"
+  },
+  "dependencies": {
+    "ts-morph": "^24.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}
