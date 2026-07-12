@@ -18,6 +18,7 @@ export { parseFile, parseSource } from "./parser.js";
 export { runStaticChecks } from "./checks/static.js";
 export { makeConfig, DEFAULT_WEIGHTS, type Config } from "./config.js";
 export { scoreFor } from "./score.js";
+export { extractRequirementIds, referencedIds } from "./traceability.js";
 export {
   buildRunReport,
   formatHuman,

@@ -15,11 +15,12 @@
  * when any file scores below the threshold — so it gates CI.
  */
 
-import { existsSync, globSync, statSync } from "node:fs";
+import { existsSync, globSync, readFileSync, statSync } from "node:fs";
 import { makeConfig, type Config } from "./config.js";
 import { parseFile } from "./parser.js";
 import { runStaticChecks } from "./checks/static.js";
 import { buildRunReport, formatHuman, type FileResult } from "./report.js";
+import { extractRequirementIds, referencedIds } from "./traceability.js";
 
 interface Args {
   patterns: string[];
@@ -103,12 +104,22 @@ async function main(): Promise<void> {
     process.stderr.write("[testguard] --dynamic ignored: no --base-url given.\n");
   }
 
+  let requiredIds: string[] | undefined;
+  if (args.requirements) {
+    if (!existsSync(args.requirements)) fail(`Requirements file not found: ${args.requirements}`);
+    requiredIds = extractRequirementIds(readFileSync(args.requirements, "utf8"));
+  }
+
   const results: FileResult[] = files.map((file) => {
     const parsed = parseFile(file);
-    return { file, findings: runStaticChecks(parsed, config) };
+    return {
+      file,
+      findings: runStaticChecks(parsed, config),
+      ...(requiredIds ? { referencedIds: referencedIds(parsed) } : {}),
+    };
   });
 
-  const report = buildRunReport(results, config);
+  const report = buildRunReport(results, config, requiredIds);
   process.stdout.write(
     (args.json ? JSON.stringify(report, null, 2) : formatHuman(report)) + "\n",
   );
