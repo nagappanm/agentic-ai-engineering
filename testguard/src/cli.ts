@@ -110,14 +110,25 @@ async function main(): Promise<void> {
     requiredIds = extractRequirementIds(readFileSync(args.requirements, "utf8"));
   }
 
-  const results: FileResult[] = files.map((file) => {
+  const useDynamic = args.dynamic && !!args.baseUrl;
+  const results: FileResult[] = [];
+  for (const file of files) {
     const parsed = parseFile(file);
-    return {
+    const findings = runStaticChecks(parsed, config);
+    const result: FileResult = {
       file,
-      findings: runStaticChecks(parsed, config),
+      findings,
       ...(requiredIds ? { referencedIds: referencedIds(parsed) } : {}),
     };
-  });
+    if (useDynamic && args.baseUrl) {
+      const { runDynamic } = await import("./checks/dynamic.js");
+      const d = await runDynamic(parsed, args.baseUrl);
+      findings.push(...d.findings);
+      result.dynamic = { ran: d.ran, hallucinatedSelectors: d.hallucinatedSelectors };
+      if (!d.ran) process.stderr.write("[testguard] dynamic mode could not launch a browser; skipped.\n");
+    }
+    results.push(result);
+  }
 
   const report = buildRunReport(results, config, requiredIds);
   process.stdout.write(
