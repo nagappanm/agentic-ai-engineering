@@ -1,0 +1,9 @@
+{
+  "good/clean.spec.ts": [],
+  "bad/phantom.spec.ts": ["TG001"],
+  "bad/noassert.spec.ts": ["TG003"],
+  "bad/missingawait.spec.ts": ["TG004"],
+  "bad/hardwait.spec.ts": ["TG005"],
+  "bad/brittle.spec.ts": ["TG006"],
+  "bad/placeholder.spec.ts": ["TG007"]
+}
