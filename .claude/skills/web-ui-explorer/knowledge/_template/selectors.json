@@ -1,0 +1,6 @@
+{
+  "app": "REPLACE_WITH_APP_SLUG",
+  "base_url": "https://REPLACE.example.com",
+  "updated": "1970-01-01",
+  "selectors": {}
+}
