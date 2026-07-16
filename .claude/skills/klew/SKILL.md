@@ -69,6 +69,11 @@ With that, `getByTestId('x')` targets `[data-automation-id="x"]`. If a given app
 really uses `data-testid`, leave the default and note it in that app's knowledge
 file.
 
+**Shortcut:** the `Makefile` in this skill wraps the whole loop —
+`make -C .claude/skills/klew help`. It generates the config (incl. sandboxed/CI
+browser options), opens the app, and runs cache/audit/pom/handoff. A full worked
+run lives in `knowledge/todomvc/` (a real TodoMVC exploration + generated POM).
+
 ## Selector policy (strict priority order)
 
 Always resolve the **most durable, user-facing** locator that uniquely matches.
