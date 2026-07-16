@@ -68,31 +68,41 @@ A subagent cannot get a human's approval mid-run, and klew's cache is
 4. Walk the goal's flow to confirm the resolved locators actually work.
 5. Close the browser (`close-all`) when done.
 
-## Return (your final report)
+## Return (your final report) — lead with TWO outputs
 
-Report exactly this, concisely:
+Every goal run must answer two things up front, clearly labelled:
 
-1. **Plan summary** — what you reused from cache vs. what you actually explored
-   (the `plan_goal.py` reuse/explore split), so the caller sees you only drove
-   the app for the gaps.
-2. **Delta candidates** — a JSON object of ONLY the newly-resolved / re-resolved
-   selectors (the gaps), keyed by logical dotted name, in the shape
-   `cache_selectors.py --input` expects, so the caller can pipe it straight in:
+- **① GOAL RESULT: PASS / FAIL** — did the goal's user journey actually work when
+  you drove it live? Give the deciding evidence (e.g. "clicked *Mark all as
+  complete* → count read *0 items left* → PASS"). FAIL if a step didn't behave,
+  an element was missing, or you couldn't complete the flow — say which step.
+- **② CACHE (JSON) UPDATE: NEEDED / UP TO DATE** — did the run produce a delta?
+  Determine it deterministically by piping your delta candidates through
+  `cache_selectors.py --app <app> --dry-run --changed-only` (prints
+  `CACHE UPDATE NEEDED` or `CACHE UP TO DATE`). NEEDED → give the delta below and
+  the persist+PR line; UP TO DATE → the cache already covers the goal, nothing to
+  persist.
+
+Then the supporting detail:
+
+3. **Plan summary** — the `plan_goal.py` reuse-vs-explore split (proof you only
+   drove the app for the gaps).
+4. **Delta candidates** (only if ② is NEEDED) — a JSON object of ONLY the
+   newly-resolved / re-resolved selectors, keyed by logical dotted name, in the
+   shape `cache_selectors.py --input` expects:
    ```json
    {
      "login.email": { "selector": "getByRole('textbox', { name: 'Email' })",
        "tier": "role", "page": "/login", "reason": "unique labelled textbox" }
    }
    ```
-   If nothing needed exploring, say so and return an empty delta.
-3. **Knowledge notes** — markdown for `knowledge/<app>/<app>.md`: auth, pages,
-   flows walked, conventions (which test attribute the app uses), and traps
-   (ambiguous locators and how you resolved them; dynamic ids to avoid).
-4. **Accessibility findings** — anything that forced a non-user-facing locator.
-5. **Open questions / what you could not reach** (blocked hosts, auth walls).
+5. **Knowledge notes** — markdown for `knowledge/<app>/<app>.md`: auth, pages,
+   flows walked, conventions, and traps (ambiguous/dynamic locators).
+6. **Accessibility findings** — anything that forced a non-user-facing locator.
+7. **Open questions / what you could not reach** (blocked hosts, auth walls).
 
-End with the one line the caller needs: *"Delta: N new/changed selectors for
-goal '<goal>' — persist with `cache_selectors.py --app <app> --approved
---changed-only` and open a PR for review."* Do not claim anything was cached or
-that a PR was opened; you never write the cache or open PRs — the main session
-does, and the human's merge is the approval.
+If ② is NEEDED, end with: *"Delta: N new/changed selectors for goal '<goal>' —
+persist with `cache_selectors.py --app <app> --approved --changed-only` and open
+a PR for review."* Never claim anything was cached or that a PR was opened — you
+never write the cache or open PRs; the main session does, and the human's merge
+is the approval.

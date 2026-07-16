@@ -25,4 +25,6 @@ export class TodoPage {
   get list(): Locator { return this.page.getByTestId('todo-list'); }
   // tier=role confidence=1.0
   get newInput(): Locator { return this.page.getByRole('textbox', { name: 'New todo' }); }
+  // tier=role confidence=1.0
+  get toggleAll(): Locator { return this.page.getByRole('checkbox', { name: 'Mark all as complete' }); }
 }

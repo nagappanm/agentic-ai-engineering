@@ -89,10 +89,47 @@ def main() -> None:
         help="skip candidates identical to what's already cached (same selector/tier/page/"
         "reason) so a PR diff shows only genuine new/changed selectors, no verified-date churn",
     )
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="don't write — just report whether the JSON needs updating (a delta exists). "
+        "Prints 'CACHE UPDATE NEEDED' or 'CACHE UP TO DATE'; no --approved required",
+    )
     args = ap.parse_args()
 
     candidates = _load_candidates(args)
     _validate(candidates)
+
+    cache = load_cache(args.app)
+    cache["app"] = args.app
+    selectors = cache["selectors"]
+
+    # Classify every candidate against the current cache.
+    new_names, changed_names, same_names = [], [], []
+    for name, entry in candidates.items():
+        existing = selectors.get(name)
+        fields = ("selector", "tier", "page", "reason")
+        if existing is None:
+            new_names.append(name)
+        elif all(existing.get(k) == entry.get(k, "") for k in fields):
+            same_names.append(name)
+        else:
+            changed_names.append(name)
+
+    delta = new_names + changed_names
+
+    # Output 2 of a goal run: does the JSON need updating? --dry-run answers without writing.
+    if args.dry_run:
+        if delta:
+            print(f"CACHE UPDATE NEEDED — {len(delta)} selector(s) to persist:")
+            for n in sorted(new_names):
+                print(f"  new:     {n}")
+            for n in sorted(changed_names):
+                print(f"  changed: {n}")
+            print("Persist with --approved --changed-only, then open a PR for review.")
+        else:
+            print(f"CACHE UP TO DATE — no update needed ({len(same_names)} already current).")
+        return
 
     if not args.approved:
         print(
@@ -105,24 +142,15 @@ def main() -> None:
             print(f"  {name}: [{entry.get('tier')}] {entry.get('selector')}", file=sys.stderr)
         sys.exit(2)
 
-    cache = load_cache(args.app)
-    cache["app"] = args.app
-    selectors = cache["selectors"]
-
     added, updated, unchanged = [], [], []
     for name, entry in candidates.items():
-        tier = entry["tier"]
-        existing = selectors.get(name)
-        # "changed" = the substantive locator fields differ (not verified/confidence).
-        same = existing is not None and all(
-            existing.get(k) == entry.get(k, "" if k != "tier" else entry["tier"])
-            for k in ("selector", "tier", "page", "reason")
-        )
-        if args.changed_only and same:
+        if args.changed_only and name in same_names:
             unchanged.append(name)
             continue
+        tier = entry["tier"]
         stamp = today()
-        record = {
+        (added if name in new_names else updated).append(name)
+        selectors[name] = {
             "selector": entry["selector"],
             "tier": tier,
             "page": entry.get("page", ""),
@@ -132,8 +160,6 @@ def main() -> None:
             "confidence": confidence(tier, stamp),
             "a11y_flag": tier in A11Y_FLAG_TIERS,
         }
-        (updated if name in selectors else added).append(name)
-        selectors[name] = record
 
     if args.changed_only and not added and not updated:
         print(f"No new/changed selectors — cache unchanged ({len(unchanged)} already current).")
