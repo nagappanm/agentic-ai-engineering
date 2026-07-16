@@ -141,6 +141,61 @@ python .claude/skills/web-ui-explorer/scripts/cache_selectors.py \
 each `status: "approved"`. See `references/cli-reference.md` for the exact
 payload schema. Never bypass the approval gate.
 
+## Accessibility findings (free byproduct)
+
+You navigate via the accessibility tree, so a11y gaps surface naturally: when a
+locator can only be resolved at tier 3–4 (testid/CSS) because the element has no
+distinctive role+name, that is usually a real a11y defect (unlabeled input,
+button with no accessible name, duplicate roles). `cache_selectors.py` marks
+such entries `a11y_flag: true` and prints them under "a11y review". Surface
+these to the user instead of silently swallowing them — they are bugs, not just
+selector inconveniences.
+
+## Keeping the cache honest — audit & self-heal
+
+Selectors rot as the UI changes. Re-validate a cached app against the live app:
+
+```bash
+# 1) print the CLI checks (one per cached selector; each must match exactly 1):
+python .claude/skills/web-ui-explorer/scripts/audit_selectors.py --app <app> --plan
+# 2) run each printed `playwright-cli hover ...`, record match counts, then:
+python .claude/skills/web-ui-explorer/scripts/audit_selectors.py --app <app> \
+  --apply-results results.json      # {"login.email": 1, "login.submit": 0}
+```
+
+`1` → re-verified (confidence refreshed); `0` → `stale`; `2+` → `ambiguous`.
+Stale/ambiguous entries are flagged, **not** auto-fixed — re-resolve them by
+exploring and re-approve through `cache_selectors.py` (the human gate holds).
+Each entry also carries a `confidence` score (tier × recency) so the next
+session trusts strong locators and re-checks weak ones.
+
+## Token-lean snapshots (diff, don't re-read)
+
+Between steps most of the page is unchanged. Save snapshots to files and feed
+only the delta:
+
+```bash
+playwright-cli snapshot --filename=before.txt
+# ...act...
+playwright-cli snapshot --filename=after.txt
+python .claude/skills/web-ui-explorer/scripts/snapshot_diff.py before.txt after.txt
+```
+
+## Closing the loop → Page Object for `yilsf` / `testguard`
+
+Approved, runtime-verified selectors become a typed Playwright Page Object so
+generated specs import real locators instead of guessing:
+
+```bash
+python .claude/skills/web-ui-explorer/scripts/export_pom.py --app <app> \
+  [--min-confidence 0.7]      # writes knowledge/<app>/<app>.pom.ts
+```
+
+Classes group by the first segment of each logical name (`login.email` →
+`LoginPage.email`); stale/ambiguous/low-confidence entries are skipped. This
+bridges live-UI reality into test authoring: **explore → approve → POM →
+`yilsf` writes specs on it → `testguard` grades them.**
+
 ## Knowledge base (what you learned about the app)
 
 Alongside the selector cache, keep a human-readable

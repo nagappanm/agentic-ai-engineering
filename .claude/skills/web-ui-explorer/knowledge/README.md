@@ -23,16 +23,20 @@ batch. Each entry:
 {
   "login.email": {
     "selector": "getByRole('textbox', { name: 'Email' })",
-    "tier": "role",
+    "tier": "role",              // role | label-text | testid | css
     "page": "/login",
     "reason": "unique labelled textbox",
-    "status": "approved",
-    "verified": "2026-07-16"
+    "status": "approved",        // approved | stale | ambiguous (set by audit)
+    "verified": "2026-07-16",
+    "confidence": 1.0,           // 0..1: tier durability x recency (x uniqueness)
+    "a11y_flag": false           // true when only a non-user-facing tier worked
   }
 }
 ```
 
-Reuse an approved selector before re-deriving it.
+Reuse an approved selector before re-deriving it. `confidence`, `status`, and
+`a11y_flag` are maintained by `cache_selectors.py` (on write) and
+`audit_selectors.py` (on re-validation) — don't hand-edit them.
 
 ## `<app>.md`
 
