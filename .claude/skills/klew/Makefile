@@ -36,7 +36,7 @@ TESTID_ATTR   ?= data-testid
 PW_EXECUTABLE ?=
 PW_SANDBOX    ?= true
 
-.PHONY: help install config open snapshot cache audit-plan audit-apply pom handoff clean
+.PHONY: help install config plan open snapshot cache cache-delta audit-plan audit-apply pom handoff clean
 
 help:            ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -57,6 +57,10 @@ config:          ## Write $(WORKDIR)/.playwright/cli.config.json from the vars a
 	} > "$(WORKDIR)/.playwright/cli.config.json"
 	@echo "wrote $(WORKDIR)/.playwright/cli.config.json"
 
+plan:            ## Cache-first: what does a goal need to explore? (NEEDS=name,name...)
+	@test -n "$(NEEDS)" || { echo "set NEEDS=<comma-separated logical names>"; exit 2; }
+	$(PY) $(SCRIPTS)/plan_goal.py --app "$(APP)" --needs "$(NEEDS)" $(if $(GOAL),--goal "$(GOAL)")
+
 open:            ## Open URL in the CLI browser (from WORKDIR so it reads the config)
 	@test -n "$(URL)" || { echo "set URL=<app url>"; exit 2; }
 	cd "$(WORKDIR)" && $(CLI) open "$(URL)"
@@ -68,6 +72,11 @@ cache:           ## Persist a resolved batch (guarded: pass APPROVED=1 for human
 	@test "$(APPROVED)" = "1" || { echo "REFUSING: pass APPROVED=1 to confirm you reviewed the batch"; exit 2; }
 	$(PY) $(SCRIPTS)/cache_selectors.py --app "$(APP)" $(if $(URL),--base-url "$(URL)") \
 	  --approved --input "$(CANDIDATES)"
+
+cache-delta:     ## Write only NEW/CHANGED selectors (for a PR diff; still needs APPROVED=1)
+	@test "$(APPROVED)" = "1" || { echo "REFUSING: pass APPROVED=1 (=propose via PR)"; exit 2; }
+	$(PY) $(SCRIPTS)/cache_selectors.py --app "$(APP)" $(if $(URL),--base-url "$(URL)") \
+	  --approved --changed-only --input "$(CANDIDATES)"
 
 audit-plan:      ## Print the live re-validation checklist for a cached app
 	$(PY) $(SCRIPTS)/audit_selectors.py --app "$(APP)" --plan
