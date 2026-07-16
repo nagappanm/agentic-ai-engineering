@@ -187,6 +187,23 @@ Don't re-drive the whole app every time. Given a goal, resolve what it needs
    the app solely to resolve the gaps. If `explore` is empty, do no browsing at
    all — the cache already covers the goal.
 
+### Every goal run reports TWO outputs
+
+1. **Goal result — PASS / FAIL:** did the goal's journey actually work when
+   driven live? (e.g. "clicked *Mark all as complete* → count *0 items left* →
+   PASS"). This is separate from selector resolution — a goal can FAIL even if
+   locators resolved (a step misbehaved), or PASS with no cache change at all.
+2. **JSON cache — UPDATE NEEDED / UP TO DATE:** did the run produce a delta?
+   Answer it deterministically, without writing:
+
+   ```bash
+   <delta.json> | python .claude/skills/klew/scripts/cache_selectors.py \
+     --app <app> --dry-run --changed-only
+   # → "CACHE UPDATE NEEDED — N selector(s)…"  or  "CACHE UP TO DATE — no update needed"
+   ```
+   (`make cache-check APP=<app> CANDIDATES=delta.json`.) NEEDED → persist the
+   delta and open a PR; UP TO DATE → nothing to do.
+
 ## Persisting the delta — interactive OR by PR
 
 Two approval styles, same cache:
