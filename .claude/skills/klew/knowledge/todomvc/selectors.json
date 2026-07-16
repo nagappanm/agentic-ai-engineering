@@ -72,6 +72,16 @@
       "verified": "2026-07-16",
       "confidence": 1.0,
       "a11y_flag": false
+    },
+    "todo.toggleAll": {
+      "selector": "getByRole('checkbox', { name: 'Mark all as complete' })",
+      "tier": "role",
+      "page": "/",
+      "reason": "unique named checkbox above the todo list; toggling it flips all items complete (count drops to '0 items left'). Distinct from per-item 'Toggle <title>' checkboxes.",
+      "status": "approved",
+      "verified": "2026-07-16",
+      "confidence": 1.0,
+      "a11y_flag": false
     }
   }
 }
