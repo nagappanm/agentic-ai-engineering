@@ -22,28 +22,28 @@ candidates.json shape (keyed by logical dotted name):
       }
     }
 
-Merges into: knowledge/<app>/selectors.json (created from the template if new),
-stamping each entry with status=approved and today's verified date.
+Each stored entry is stamped with status=approved, today's verified date, a
+0..1 confidence score (tier x recency), and an a11y_flag when the element could
+only be reached by a non-user-facing tier (testid/css).
 """
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import json
 import sys
-from pathlib import Path
 
-SKILL_ROOT = Path(__file__).resolve().parent.parent
-KNOWLEDGE = SKILL_ROOT / "knowledge"
-VALID_TIERS = {"role", "label-text", "testid", "css"}
-
-
-def _today() -> str:
-    return _dt.date.today().isoformat()
+from _common import (
+    A11Y_FLAG_TIERS,
+    VALID_TIERS,
+    confidence,
+    load_cache,
+    save_cache,
+    today,
+)
 
 
 def _load_candidates(args: argparse.Namespace) -> dict:
-    raw = Path(args.input).read_text() if args.input else sys.stdin.read()
+    raw = open(args.input).read() if args.input else sys.stdin.read()
     if not raw.strip():
         sys.exit("error: no candidate selectors provided (empty --input/stdin)")
     try:
@@ -70,18 +70,10 @@ def _validate(candidates: dict) -> None:
         sys.exit("error: invalid candidates:\n  - " + "\n  - ".join(problems))
 
 
-def _load_cache(app_dir: Path) -> dict:
-    cache_file = app_dir / "selectors.json"
-    if cache_file.exists():
-        return json.loads(cache_file.read_text())
-    template = KNOWLEDGE / "_template" / "selectors.json"
-    base = json.loads(template.read_text()) if template.exists() else {"selectors": {}}
-    base.setdefault("selectors", {})
-    return base
-
-
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--app", required=True, help="application slug (folder under knowledge/)")
     ap.add_argument("--base-url", default=None, help="base URL to record for the app")
     ap.add_argument("--input", default=None, help="path to candidates JSON (else read stdin)")
@@ -106,35 +98,40 @@ def main() -> None:
             print(f"  {name}: [{entry.get('tier')}] {entry.get('selector')}", file=sys.stderr)
         sys.exit(2)
 
-    app_dir = KNOWLEDGE / args.app
-    app_dir.mkdir(parents=True, exist_ok=True)
-    cache = _load_cache(app_dir)
+    cache = load_cache(args.app)
     cache["app"] = args.app
     if args.base_url:
         cache["base_url"] = args.base_url
-    cache["updated"] = _today()
-    selectors = cache.setdefault("selectors", {})
+    cache["updated"] = today()
+    selectors = cache["selectors"]
 
     added, updated = [], []
     for name, entry in candidates.items():
+        tier = entry["tier"]
+        stamp = today()
         record = {
             "selector": entry["selector"],
-            "tier": entry["tier"],
+            "tier": tier,
             "page": entry.get("page", ""),
             "reason": entry.get("reason", ""),
             "status": "approved",
-            "verified": _today(),
+            "verified": stamp,
+            "confidence": confidence(tier, stamp),
+            "a11y_flag": tier in A11Y_FLAG_TIERS,
         }
         (updated if name in selectors else added).append(name)
         selectors[name] = record
 
-    (app_dir / "selectors.json").write_text(json.dumps(cache, indent=2) + "\n")
+    path = save_cache(args.app, cache)
 
-    print(f"Wrote {app_dir / 'selectors.json'}")
+    print(f"Wrote {path}")
     if added:
         print(f"  added:   {', '.join(sorted(added))}")
     if updated:
         print(f"  updated: {', '.join(sorted(updated))}")
+    flagged = [n for n, e in selectors.items() if e.get("a11y_flag")]
+    if flagged:
+        print(f"  a11y review (non-user-facing locator): {', '.join(sorted(flagged))}")
 
 
 if __name__ == "__main__":
