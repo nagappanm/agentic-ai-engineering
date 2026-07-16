@@ -35,6 +35,19 @@ You own two things the CLI does not: **choosing durable, user-facing locators**
 for what you touch, and **persisting the ones that work** into a per-app cache +
 knowledge base — but only with a human's sign-off.
 
+## Skill vs. agent
+
+klew ships in two forms that share this same discipline:
+
+- **This skill** — loaded into the main thread for interactive, human-steered
+  exploration; the approval gate is a natural pause to ask the user.
+- **The `klew` subagent** (`.claude/agents/klew.md`) — runs in an isolated
+  context so the token-heavy snapshot/driving never pollutes the main thread.
+  Dispatch it to "explore/map `<app>`"; it loads this skill, but **never caches**
+  (a subagent can't get mid-run approval) — it returns a proposed candidate
+  batch, and the main session runs `cache_selectors.py --approved` after you
+  sign off.
+
 ## When to use
 
 - "Open `<app>` and walk through `<flow>`" / "log in and take me to settings"
