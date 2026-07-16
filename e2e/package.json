@@ -1,0 +1,8 @@
+{
+  "name": "klew-e2e",
+  "private": true,
+  "type": "module",
+  "description": "klew -> yilsf loop demo: Playwright specs built on a klew-exported Page Object.",
+  "scripts": { "test": "playwright test" },
+  "devDependencies": { "@playwright/test": "^1.48.0" }
+}
