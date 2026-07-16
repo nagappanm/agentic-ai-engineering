@@ -164,6 +164,51 @@ python .claude/skills/klew/scripts/cache_selectors.py \
 each `status: "approved"`. See `references/cli-reference.md` for the exact
 payload schema. Never bypass the approval gate.
 
+## Goal-directed, cache-first exploration (explore only when needed)
+
+Don't re-drive the whole app every time. Given a goal, resolve what it needs
+**from the cache first** and only launch the browser for the gaps:
+
+1. **Derive the needs.** From the natural-language goal (e.g. "add an item and
+   complete it") name the logical selectors it requires
+   (`todo.newInput`, `todo.count`, …). Show this list — it's your judgment.
+2. **Plan against the cache.** `plan_goal.py` splits the needs into *reuse*
+   (cached and fresh — no browser) and *explore* (missing / stale / low
+   confidence / older than `--stale-days`):
+
+   ```bash
+   python .claude/skills/klew/scripts/plan_goal.py --app <app> \
+     --goal "add an item and complete it" \
+     --needs todo.newInput,todo.count,login.email
+   # → { "reuse": [...], "explore": [{ "name": "login.email", "why": "missing" }] }
+   ```
+   (`make plan APP=<app> NEEDS=a,b,c GOAL="…"`.)
+3. **Explore only the `explore` list.** Reuse the cached locators verbatim; drive
+   the app solely to resolve the gaps. If `explore` is empty, do no browsing at
+   all — the cache already covers the goal.
+
+## Persisting the delta — interactive OR by PR
+
+Two approval styles, same cache:
+
+- **Interactive (skill/main thread):** present the batch, get the user's yes,
+  then `cache_selectors.py --approved`.
+- **By PR (best for the agent / async review):** write **only the delta** with
+  `--changed-only` so the diff shows just genuine new/changed selectors (no
+  verified-date churn), commit on a branch, and open a PR. **The human's review +
+  merge is the approval.**
+
+  ```bash
+  # after approval-to-propose, on a fresh branch:
+  make cache-delta APP=<app> CANDIDATES=candidates.json APPROVED=1
+  git add .claude/skills/klew/knowledge/<app>/selectors.json && git commit -m "klew(<app>): add <n> selectors for <goal>"
+  # then open a PR; a human reviews the JSON diff and merges = approval
+  ```
+
+  In the PR flow `--approved` means "propose via PR"; the real gate is the merge.
+  The **klew subagent** never opens the PR itself (it has no Write/GitHub tools) —
+  it returns the delta candidates and the main session persists + opens the PR.
+
 ## Accessibility findings (free byproduct)
 
 You navigate via the accessibility tree, so a11y gaps surface naturally: when a

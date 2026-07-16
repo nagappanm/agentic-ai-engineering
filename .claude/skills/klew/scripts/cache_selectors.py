@@ -80,7 +80,14 @@ def main() -> None:
     ap.add_argument(
         "--approved",
         action="store_true",
-        help="REQUIRED — confirms a human approved this batch; without it nothing is written",
+        help="REQUIRED — confirms sign-off (interactive human approval, or 'propose via PR' "
+        "in the PR-approval flow, where the human's real approval is merging the PR)",
+    )
+    ap.add_argument(
+        "--changed-only",
+        action="store_true",
+        help="skip candidates identical to what's already cached (same selector/tier/page/"
+        "reason) so a PR diff shows only genuine new/changed selectors, no verified-date churn",
     )
     args = ap.parse_args()
 
@@ -100,14 +107,20 @@ def main() -> None:
 
     cache = load_cache(args.app)
     cache["app"] = args.app
-    if args.base_url:
-        cache["base_url"] = args.base_url
-    cache["updated"] = today()
     selectors = cache["selectors"]
 
-    added, updated = [], []
+    added, updated, unchanged = [], [], []
     for name, entry in candidates.items():
         tier = entry["tier"]
+        existing = selectors.get(name)
+        # "changed" = the substantive locator fields differ (not verified/confidence).
+        same = existing is not None and all(
+            existing.get(k) == entry.get(k, "" if k != "tier" else entry["tier"])
+            for k in ("selector", "tier", "page", "reason")
+        )
+        if args.changed_only and same:
+            unchanged.append(name)
+            continue
         stamp = today()
         record = {
             "selector": entry["selector"],
@@ -122,6 +135,13 @@ def main() -> None:
         (updated if name in selectors else added).append(name)
         selectors[name] = record
 
+    if args.changed_only and not added and not updated:
+        print(f"No new/changed selectors — cache unchanged ({len(unchanged)} already current).")
+        return
+
+    if args.base_url:
+        cache["base_url"] = args.base_url
+    cache["updated"] = today()
     path = save_cache(args.app, cache)
 
     print(f"Wrote {path}")
@@ -129,6 +149,8 @@ def main() -> None:
         print(f"  added:   {', '.join(sorted(added))}")
     if updated:
         print(f"  updated: {', '.join(sorted(updated))}")
+    if unchanged:
+        print(f"  unchanged (skipped): {', '.join(sorted(unchanged))}")
     flagged = [n for n, e in selectors.items() if e.get("a11y_flag")]
     if flagged:
         print(f"  a11y review (non-user-facing locator): {', '.join(sorted(flagged))}")
