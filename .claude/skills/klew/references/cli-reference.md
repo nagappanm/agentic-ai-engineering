@@ -130,6 +130,42 @@ playwright-cli video-start [file] | video-stop
 }
 ```
 
+## Sandboxed / CI containers (headless, root, egress-gated)
+
+In a locked-down image the CLI's bundled Chromium may be missing, sandboxing
+fails as root, and outbound HTTPS is proxied. Point at a pre-installed browser
+and adjust launch options in `.playwright/cli.config.json`:
+
+```jsonc
+{
+  "testIdAttribute": "data-test",
+  "browser": {
+    "browserName": "chromium",
+    "launchOptions": {
+      "headless": true,
+      "chromiumSandbox": false,               // running as root
+      "executablePath": "/opt/pw-browsers/chromium-<rev>/chrome-linux/chrome",
+      "proxy": { "server": "http://127.0.0.1:<port>" }  // only if the app is remote
+    }
+  }
+}
+```
+
+- **Local app** (recommended): serve it on `127.0.0.1` and omit `proxy` —
+  localhost bypasses the egress proxy.
+- **Remote app**: set `proxy.server` to `$HTTPS_PROXY`. If the org policy denies
+  the host (403 on CONNECT), that host is simply not reachable — do not route
+  around it.
+
+The `Makefile` in this skill generates this config for you:
+`make config URL=<url> TESTID_ATTR=data-test PW_EXECUTABLE=<chrome> PW_SANDBOX=false`.
+
+## Makefile targets
+
+`make -C .claude/skills/klew help` lists them: `install`, `config`, `open`,
+`snapshot`, `cache` (guarded by `APPROVED=1`), `audit-plan`, `audit-apply`,
+`pom`, `handoff` (copies the POM to `POM_DEST`, e.g. for `yilsf` specs), `clean`.
+
 ## Cache payload schema (for `scripts/cache_selectors.py --input`)
 
 ```jsonc

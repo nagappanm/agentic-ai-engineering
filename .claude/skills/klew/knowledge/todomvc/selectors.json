@@ -1,0 +1,77 @@
+{
+  "app": "todomvc",
+  "base_url": "http://127.0.0.1:8123/",
+  "updated": "2026-07-16",
+  "selectors": {
+    "todo.newInput": {
+      "selector": "getByRole('textbox', { name: 'New todo' })",
+      "tier": "role",
+      "page": "/",
+      "reason": "unique labelled textbox; user-facing beats generate-locator's testid default",
+      "status": "approved",
+      "verified": "2026-07-16",
+      "confidence": 1.0,
+      "a11y_flag": false
+    },
+    "todo.list": {
+      "selector": "getByTestId('todo-list')",
+      "tier": "testid",
+      "page": "/",
+      "reason": "getByRole('list') matched 2 (todo list + filters) -> strict-mode violation; test-id is stable",
+      "status": "approved",
+      "verified": "2026-07-16",
+      "confidence": 0.75,
+      "a11y_flag": true
+    },
+    "todo.count": {
+      "selector": "getByTestId('todo-count')",
+      "tier": "testid",
+      "page": "/",
+      "reason": "status text 'N items left' is a generic node with no role/name",
+      "status": "approved",
+      "verified": "2026-07-16",
+      "confidence": 0.75,
+      "a11y_flag": true
+    },
+    "todo.clearCompleted": {
+      "selector": "getByRole('button', { name: 'Clear completed' })",
+      "tier": "role",
+      "page": "/",
+      "reason": "unique named button",
+      "status": "approved",
+      "verified": "2026-07-16",
+      "confidence": 1.0,
+      "a11y_flag": false
+    },
+    "filter.all": {
+      "selector": "getByRole('link', { name: 'All' })",
+      "tier": "role",
+      "page": "/",
+      "reason": "unique named link",
+      "status": "approved",
+      "verified": "2026-07-16",
+      "confidence": 1.0,
+      "a11y_flag": false
+    },
+    "filter.active": {
+      "selector": "getByRole('link', { name: 'Active' })",
+      "tier": "role",
+      "page": "/",
+      "reason": "unique named link",
+      "status": "approved",
+      "verified": "2026-07-16",
+      "confidence": 1.0,
+      "a11y_flag": false
+    },
+    "filter.completed": {
+      "selector": "getByRole('link', { name: 'Completed' })",
+      "tier": "role",
+      "page": "/",
+      "reason": "unique named link",
+      "status": "approved",
+      "verified": "2026-07-16",
+      "confidence": 1.0,
+      "a11y_flag": false
+    }
+  }
+}
