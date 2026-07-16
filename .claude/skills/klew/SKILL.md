@@ -1,7 +1,7 @@
 ---
-name: web-ui-explorer
+name: klew
 description: >-
-  Explore and navigate a live web UI with the token-efficient Microsoft
+  Klew — explore and navigate a live web UI with the token-efficient Microsoft
   Playwright CLI (`@playwright/cli`), resolving robust locators for the elements
   you interact with. Use when the request is to drive, inspect, click through,
   fill, or map a running web application in a real browser ("open the app and
@@ -16,7 +16,12 @@ description: >-
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
 
-# web-ui-explorer
+# Klew
+
+> *klew* (n., archaic) — the ball of thread that led Theseus out of the
+> labyrinth; the literal origin of the word *clue*. This skill leaves that
+> thread through any web app: the approved selector cache + knowledge base you
+> retrace on every return trip.
 
 This skill drives a **real browser** through Microsoft's
 [`@playwright/cli`](https://github.com/microsoft/playwright-cli) — the
@@ -131,7 +136,7 @@ whole batch for one approval**:
   write without `--approved`, which stands in for that sign-off):
 
 ```bash
-python .claude/skills/web-ui-explorer/scripts/cache_selectors.py \
+python .claude/skills/klew/scripts/cache_selectors.py \
   --app <app> --base-url <url> --approved --input <candidates.json>
 ```
 
@@ -157,9 +162,9 @@ Selectors rot as the UI changes. Re-validate a cached app against the live app:
 
 ```bash
 # 1) print the CLI checks (one per cached selector; each must match exactly 1):
-python .claude/skills/web-ui-explorer/scripts/audit_selectors.py --app <app> --plan
+python .claude/skills/klew/scripts/audit_selectors.py --app <app> --plan
 # 2) run each printed `playwright-cli hover ...`, record match counts, then:
-python .claude/skills/web-ui-explorer/scripts/audit_selectors.py --app <app> \
+python .claude/skills/klew/scripts/audit_selectors.py --app <app> \
   --apply-results results.json      # {"login.email": 1, "login.submit": 0}
 ```
 
@@ -178,7 +183,7 @@ only the delta:
 playwright-cli snapshot --filename=before.txt
 # ...act...
 playwright-cli snapshot --filename=after.txt
-python .claude/skills/web-ui-explorer/scripts/snapshot_diff.py before.txt after.txt
+python .claude/skills/klew/scripts/snapshot_diff.py before.txt after.txt
 ```
 
 ## Closing the loop → Page Object for `yilsf` / `testguard`
@@ -187,7 +192,7 @@ Approved, runtime-verified selectors become a typed Playwright Page Object so
 generated specs import real locators instead of guessing:
 
 ```bash
-python .claude/skills/web-ui-explorer/scripts/export_pom.py --app <app> \
+python .claude/skills/klew/scripts/export_pom.py --app <app> \
   [--min-confidence 0.7]      # writes knowledge/<app>/<app>.pom.ts
 ```
 

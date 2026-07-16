@@ -1,4 +1,4 @@
-"""Shared helpers for the web-ui-explorer cache scripts.
+"""Shared helpers for the klew cache scripts.
 
 Standalone-script friendly: each CLI adds its own directory to sys.path[0], so
 `from _common import ...` resolves when the scripts are run directly.
