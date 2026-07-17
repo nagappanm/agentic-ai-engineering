@@ -1,0 +1,156 @@
+name: klew PR gate
+
+# Runs the user-journey suite against the PR's app and takes a traffic-light
+# action: 🟢 approve + auto-merge · 🟠 request review · 🔴 file a bug.
+# Deterministic — no LLM/API key needed (journeys=Playwright, grade=testguard,
+# JSON-update=klew dry-run, delta-justification=yilsf mock).
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  checks: write
+
+concurrency:
+  group: klew-pr-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    env:
+      # Enterprise: set repo variable KLEW_BASE_URL to a per-PR preview/staging
+      # URL to test that instead of the built-and-served local app.
+      KLEW_BASE_URL: ${{ vars.KLEW_BASE_URL }}
+      TRACKER: ${{ vars.KLEW_TRACKER || 'github' }}
+      JIRA_PROJECT: ${{ vars.KLEW_JIRA_PROJECT }}
+      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          (cd e2e && npm ci || npm install)
+          (cd testguard && npm ci || npm install)
+          (cd e2e && npx playwright install --with-deps chromium)
+
+      - name: Resolve requirements (Jira ticket → else fallback file)
+        run: |
+          python pr_gate/requirements_source.py \
+            --branch "${{ github.head_ref }}" \
+            --title "${{ github.event.pull_request.title }}" \
+            --fallback e2e/requirements.txt \
+            --out /tmp/requirements.txt
+
+      - name: Resolve BASE_URL (build & serve, or preview URL)
+        run: |
+          if [ -n "$KLEW_BASE_URL" ]; then
+            echo "BASE_URL=$KLEW_BASE_URL" >> "$GITHUB_ENV"
+          else
+            # Default demo app: serve the static e2e TodoMVC on localhost.
+            (cd e2e/app 2>/dev/null || cd e2e) && nohup python3 -m http.server 8123 --bind 127.0.0.1 >/tmp/app.log 2>&1 &
+            for i in $(seq 1 20); do curl -sf http://127.0.0.1:8123/ >/dev/null && break; sleep 0.5; done
+            echo "BASE_URL=http://127.0.0.1:8123" >> "$GITHUB_ENV"
+          fi
+
+      - name: Run journey suite
+        continue-on-error: true
+        run: |
+          cd e2e
+          BASE_URL="$BASE_URL" npx playwright test --reporter=json > "$GITHUB_WORKSPACE/results.json" || true
+
+      - name: Grade with testguard
+        continue-on-error: true
+        run: |
+          cd testguard
+          npx tsx src/cli.ts "$GITHUB_WORKSPACE/e2e/*.spec.ts" --json \
+            --require-traceability --requirements /tmp/requirements.txt \
+            --dynamic --base-url "$BASE_URL" > "$GITHUB_WORKSPACE/testguard.json" || true
+
+      - name: Cache-update? (does this PR change the selector cache?) + justify
+        id: cache
+        run: |
+          BASE=origin/${{ github.base_ref }}
+          git diff "$BASE"...HEAD > /tmp/pr.diff || git diff HEAD~1 > /tmp/pr.diff
+          if git diff --name-only "$BASE"...HEAD | grep -q 'selectors.json'; then
+            echo "status=CACHE UPDATE NEEDED" >> "$GITHUB_OUTPUT"
+            if python pr_gate/justify.py --diff /tmp/pr.diff --requirements /tmp/requirements.txt; then
+              echo "justified=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "justified=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "status=CACHE UP TO DATE" >> "$GITHUB_OUTPUT"
+            echo "justified=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decide traffic light
+        id: gate
+        run: |
+          set +e
+          python pr_gate/gate.py \
+            --journeys results.json --testguard testguard.json \
+            --cache-status "${{ steps.cache.outputs.status }}" \
+            --justified "${{ steps.cache.outputs.justified }}" \
+            --emit-bugs /tmp/bugs --pr "$PR" --base-url "$BASE_URL" \
+            --json > verdict.json
+          code=$?
+          light=$(python -c "import json;print(json.load(open('verdict.json'))['light'])")
+          echo "light=$light" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          cat verdict.json
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: klew-pr-gate
+          path: |
+            results.json
+            testguard.json
+            verdict.json
+            e2e/test-results/**
+
+      - name: 🔴 RED — file bug(s) + fail
+        if: steps.gate.outputs.light == 'red'
+        run: |
+          STORY=$(python pr_gate/requirements_source.py --branch "${{ github.head_ref }}" \
+            --title "${{ github.event.pull_request.title }}" --out /dev/null 2>&1 | grep -oE 'key=[A-Z]+-[0-9]+' | cut -d= -f2 || true)
+          for f in /tmp/bugs/*.json; do
+            [ -e "$f" ] || continue
+            python pr_gate/tracker.py --bug "$f" --tracker "$TRACKER" \
+              --project "$JIRA_PROJECT" --repo "${{ github.repository }}" \
+              ${STORY:+--story-key "$STORY"} || true
+          done
+          gh pr comment "$PR" --body "🔴 klew PR gate: journey failure(s) — bug(s) filed. See the \`klew-pr-gate\` artifact for repro." || true
+          exit 1
+
+      - name: 🟠 ORANGE — request review
+        if: steps.gate.outputs.light == 'orange'
+        run: |
+          gh pr edit "$PR" --add-label "needs-review" || true
+          REASONS=$(python -c "import json;print(chr(10).join('- '+r for r in json.load(open('verdict.json'))['reasons']))")
+          gh pr comment "$PR" --body "$(printf '🟠 klew PR gate: needs human review.\n%s' "$REASONS")" || true
+
+      - name: 🟢 GREEN — approve + auto-merge
+        if: steps.gate.outputs.light == 'green'
+        run: |
+          gh pr review "$PR" --approve --body "🟢 klew PR gate: all journeys pass, testguard clean." || true
+          gh pr merge "$PR" --auto --squash || true
