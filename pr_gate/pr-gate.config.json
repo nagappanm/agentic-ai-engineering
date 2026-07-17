@@ -1,0 +1,18 @@
+{
+  "threshold": 70,
+  "green_score": 85,
+  "ui_globs": [
+    "**/*.html",
+    "**/*.htm",
+    "**/*.tsx",
+    "**/*.jsx",
+    "**/*.vue",
+    "**/*.svelte",
+    "**/*.css",
+    "e2e/**"
+  ],
+  "requirements_file": "e2e/requirements.txt",
+  "tracker": "jira",
+  "jira_project": "",
+  "app_cache": "todomvc"
+}

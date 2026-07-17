@@ -1,0 +1,13 @@
+TMVC-1: A user can add an item to the list; the "items left" count reflects it.
+TMVC-2: Adding several items keeps an accurate "items left" count.
+TMVC-3: Entering only whitespace adds nothing; the footer stays hidden.
+TMVC-4: Leading/trailing whitespace in a new item is trimmed.
+TMVC-5: Completing an item decrements the count and reveals "Clear completed".
+TMVC-6: Un-completing an item increments the count and hides "Clear completed".
+TMVC-7: Deleting the last item removes it and hides the footer.
+TMVC-8: The Active filter shows only incomplete items.
+TMVC-9: The Completed filter shows only completed items.
+TMVC-10: The All filter shows every item.
+TMVC-11: Clear completed removes only completed items, keeping active ones.
+TMVC-12: The count reads singular for one item and plural for more.
+TMVC-13: Deleting one of several items keeps the rest, count updates.

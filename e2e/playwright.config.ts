@@ -11,11 +11,11 @@ export default defineConfig({
     // App uses `data-test`; harmless for these role/text-based specs but kept
     // so getByTestId-based POM getters also resolve here.
     testIdAttribute: "data-test",
+    // PW_CHROMIUM pins a pre-installed browser (this sandbox); unset in normal
+    // CI so Playwright uses the browser it installed via `playwright install`.
     launchOptions: {
       args: ["--no-sandbox"],
-      executablePath:
-        process.env.PW_CHROMIUM ??
-        "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+      ...(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {}),
     },
   },
 });
