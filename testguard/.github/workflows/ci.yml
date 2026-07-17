@@ -1,0 +1,26 @@
+# Activates once testguard is split into its own repo (this path is ignored by
+# the monorepo, which only reads workflows from its root .github/).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - name: Install Chromium (for the dynamic-mode test)
+        run: npx playwright install --with-deps chromium
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run benchmark
+      - run: npm run build
