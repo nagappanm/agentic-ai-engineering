@@ -49,3 +49,39 @@ python pr_gate/tracker.py --bug bug.json --tracker jira --dry-run   # print, don
 ```
 
 Wired per-PR by `.github/workflows/klew-pr-gate.yml`. Tests: `tests/test_pr_gate.py`.
+
+## Bug filing — enablement checklist
+
+`tracker.py` files to **Jira** (primary) or **GitHub Issues** (alternative), or
+prints with `--dry-run`. GitHub works out of the box; Jira needs credentials +
+scope. The code is ready and tested — this is purely a setup checklist.
+
+### GitHub Issues (works today)
+- CI: `GH_TOKEN`/`GITHUB_TOKEN` is provided by Actions; set `KLEW_TRACKER=github`
+  (repo variable) and the workflow files via `gh`.
+- In a Claude session: the GitHub MCP (`issue_write`) files the same bug dict.
+
+### Jira — two independent paths (pick either)
+
+**A. CI via Jira REST (no MCP, recommended for automation)**
+- [ ] Create a Jira **API token** (id.atlassian.com → API tokens).
+- [ ] Add repo **secrets**: `JIRA_BASE_URL` (e.g. `https://YOURSITE.atlassian.net`),
+      `JIRA_EMAIL`, `JIRA_API_TOKEN`.
+- [ ] Add repo **variables**: `KLEW_TRACKER=jira`, `KLEW_JIRA_PROJECT=<PROJECTKEY>`.
+- [ ] Ensure the token's user can **create Bugs** in that project.
+- Then a 🔴 run files a Jira Bug (deduped by the `pr-<n>/<journey>` label) and
+  links it to the story parsed from the branch/PR (`ABC-123`).
+
+**B. Interactive Claude session via the Atlassian MCP**
+- [ ] Connect the Atlassian (Rovo) connector **with Jira scopes** —
+      `read:jira-work` **and** `write:jira-work` (issue create). Confluence-only
+      scopes are **not** enough: `getVisibleJiraProjects` 404s and
+      `createJiraIssue` is unavailable.
+- [ ] Verify: `getAccessibleAtlassianResources` lists a `*:jira-work` scope and
+      `getVisibleJiraProjects` returns your project.
+- Then the session can `createJiraIssue` (type **Bug**) from the same body and
+  `createIssueLink` it to the story / a GitHub issue.
+
+> Scope note (observed): a connector authorized for **Confluence only**
+> (`read:page/space/comment:confluence`, `search:confluence`) cannot touch Jira —
+> filing must use **path A** until Jira scopes are granted by a Workspace admin.
