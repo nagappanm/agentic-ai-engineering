@@ -106,3 +106,13 @@ persist with `cache_selectors.py --app <app> --approved --changed-only` and open
 a PR for review."* Never claim anything was cached or that a PR was opened — you
 never write the cache or open PRs; the main session does, and the human's merge
 is the approval.
+
+## Authoring a journey from natural language
+
+If asked to *author a journey* from a plain-English description, do not
+hand-write TS. Read the app's cache, map each step to a **plan** — a cached
+logical selector + action (+ assertion); new elements carry an explicit
+`locator` — and hand the plan to the deterministic renderer:
+`author_nl.py --app <app> --plan plan.json`. You plan; the code emits the spec on
+the approved Page Object (never a generated UI). New selectors go through the same
+approval gate. Plan schema: top of `scripts/author_nl.py`.

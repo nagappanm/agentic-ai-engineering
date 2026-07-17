@@ -1,0 +1,16 @@
+{
+  "name": "nl-add-and-complete",
+  "req": "TMVC-15",
+  "_note": "A journey plan the klew agent produces from plain English, e.g. 'add an item called Write tests and complete it, then the count should read 0 items left'. Rendered deterministically by author_nl.py onto the approved Page Object.",
+  "steps": [
+    { "action": "goto" },
+    { "action": "fill", "target": "todo.newInput", "value": "Write tests" },
+    { "action": "press", "target": "todo.newInput", "key": "Enter" },
+    {
+      "action": "check",
+      "target": "recorded.toggleWriteTests",
+      "locator": "getByRole('checkbox', { name: 'Toggle Write tests' })"
+    },
+    { "assert": "toHaveText", "target": "todo.count", "expected": "0 items left" }
+  ]
+}

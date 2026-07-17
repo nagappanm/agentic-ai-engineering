@@ -246,6 +246,22 @@ candidate. Review the draft, approve the new selectors the normal way
 (`cache_selectors.py --approved --changed-only`), then it's a normal journey in
 the suite / PR gate. See `scripts/author_journey.py`.
 
+### From plain English (LLM plans, code renders)
+
+You (or the klew agent) can author a journey from a natural-language description:
+read the app's cache, turn the steps into a small **plan JSON** (which cached
+logical selector + action + assertion per step; new elements carry an explicit
+`locator`), then render it deterministically:
+
+```bash
+python .claude/skills/klew/scripts/author_nl.py --app <app> --plan plan.json --out-dir e2e
+```
+
+The LLM only *plans*; `author_nl.py` emits the spec on the approved Page Object —
+so the output is a **reviewed, deterministic** journey, never a live-generated UI.
+Same approval gate for any new selector. Plan schema is documented at the top of
+`scripts/author_nl.py`.
+
 ## Accessibility findings (free byproduct)
 
 You navigate via the accessibility tree, so a11y gaps surface naturally: when a

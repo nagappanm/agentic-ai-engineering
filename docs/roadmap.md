@@ -53,6 +53,13 @@ Deterministic (no LLM), reuses the approval + POM + gate pipeline. See
 3. **Shadow-DOM / iframe patterns** — first-class recipes in the selector policy.
 4. **Zephyr / Jira test-management sync** — push journey results as Jira test
    executions; two-way requirement ↔ journey linkage.
-5. **Plain-English authoring** — the klew agent writes a journey from NL steps +
-   the approved POM (our LLM-native counterpart to Reflect's NL authoring).
+5. **Plain-English authoring** — ✅ **shipped**: the klew agent turns NL steps into
+   a plan; `author_nl.py` renders a deterministic journey on the approved POM (our
+   LLM-native counterpart to Reflect's NL authoring — *authoring-time* generative,
+   *runtime* deterministic, **not** generative UI).
 6. **Hosted no-code UI** — optional front-end over the recorder for non-engineers.
+
+> **Non-goal — Generative UI.** We deliberately do not build live/runtime
+> AI-generated interfaces: they fight testability (a UI that regenerates per
+> render breaks selector-based testing — klew's premise). Our generative use is
+> confined to *authoring artifacts* a human reviews (recorder drafts, NL plans).
