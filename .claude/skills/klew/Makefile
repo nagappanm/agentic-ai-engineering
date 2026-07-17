@@ -29,9 +29,10 @@ CANDIDATES ?= candidates.json
 POM_DEST   ?=
 MIN_CONF   ?= 0.0
 
-# Authoring (record → journey): CODEGEN recording path, NAME slug, REQ tag
+# Authoring (record → journey / NL → journey): CODEGEN or PLAN, NAME slug, REQ tag
 REPO       := $(abspath $(SKILL_DIR)/../../..)
 CODEGEN    ?=
+PLAN       ?=
 NAME       ?=
 REQ        ?=
 OUTDIR     ?= $(REPO)/e2e
@@ -43,7 +44,7 @@ TESTID_ATTR   ?= data-testid
 PW_EXECUTABLE ?=
 PW_SANDBOX    ?= true
 
-.PHONY: help install config plan record author open snapshot cache cache-delta cache-check audit-plan audit-apply pom handoff clean
+.PHONY: help install config plan record author author-nl open snapshot cache cache-delta cache-check audit-plan audit-apply pom handoff clean
 
 help:            ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -78,6 +79,11 @@ author:          ## Normalize a recording → klew journey + candidate selectors
 	@test -n "$(NAME)" || { echo "set NAME=<journey slug>"; exit 2; }
 	$(PY) $(SCRIPTS)/author_journey.py --app "$(APP)" --codegen "$(CODEGEN)" \
 	  --name "$(NAME)" $(if $(REQ),--req "$(REQ)") --out-dir "$(OUTDIR)"
+
+author-nl:       ## Render a natural-language journey PLAN → klew journey (PLAN, NAME opt.)
+	@test -n "$(PLAN)" || { echo "set PLAN=<plan.json>"; exit 2; }
+	$(PY) $(SCRIPTS)/author_nl.py --app "$(APP)" --plan "$(PLAN)" \
+	  $(if $(NAME),--name "$(NAME)") $(if $(REQ),--req "$(REQ)") --out-dir "$(OUTDIR)"
 
 open:            ## Open URL in the CLI browser (from WORKDIR so it reads the config)
 	@test -n "$(URL)" || { echo "set URL=<app url>"; exit 2; }

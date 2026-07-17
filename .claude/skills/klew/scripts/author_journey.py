@@ -89,8 +89,16 @@ def _new_logical(selector: str, taken: set[str]) -> str:
     return unique
 
 
-def to_journey(actions: list[dict], app: str, cache: dict, *, name: str, req: str) -> dict:
-    """Render a journey spec + candidate selectors from parsed codegen actions."""
+def to_journey(
+    actions: list[dict],
+    app: str,
+    cache: dict,
+    *,
+    name: str,
+    req: str,
+    source: str = "a `playwright codegen` recording",
+) -> dict:
+    """Render a journey spec + candidate selectors from parsed actions."""
     selectors = cache.get("selectors", {})
     by_norm = {_norm(v["selector"]): k for k, v in selectors.items()}
     candidates: dict[str, dict] = {}
@@ -99,8 +107,8 @@ def to_journey(actions: list[dict], app: str, cache: dict, *, name: str, req: st
     stats = {"reuse": 0, "new": 0}
 
     def resolve(loc: str) -> tuple[str, bool]:
-        """Return (expr, is_new). expr is a POM getter or an inline page locator."""
-        logical = by_norm.get(_norm(loc))
+        """Return (expr, is_new). `loc` may be a cached logical name OR a raw locator."""
+        logical = loc if loc in selectors else by_norm.get(_norm(loc))
         if logical:
             group, *rest = logical.split(".")
             cls = _class_name(group)
@@ -136,7 +144,7 @@ def to_journey(actions: list[dict], app: str, cache: dict, *, name: str, req: st
     header = (
         'import { test, expect } from "@playwright/test";\n'
         f"{imports}\n"
-        "// AUTHORED from a `playwright codegen` recording via klew author_journey.py.\n"
+        f"// AUTHORED from {source} via klew.\n"
         "// Review, then approve any NEW selectors with cache_selectors.py.\n\n"
         f'test.describe("{app} — authored", () => {{\n'
         f'  test("{title}", async ({{ page }}) => {{\n'
