@@ -29,6 +29,13 @@ CANDIDATES ?= candidates.json
 POM_DEST   ?=
 MIN_CONF   ?= 0.0
 
+# Authoring (record → journey): CODEGEN recording path, NAME slug, REQ tag
+REPO       := $(abspath $(SKILL_DIR)/../../..)
+CODEGEN    ?=
+NAME       ?=
+REQ        ?=
+OUTDIR     ?= $(REPO)/e2e
+
 # Browser knobs (handy in headless/CI containers):
 # PW_EXECUTABLE  path to a pre-installed chromium (optional)
 # PW_SANDBOX     set false when running as root
@@ -36,7 +43,7 @@ TESTID_ATTR   ?= data-testid
 PW_EXECUTABLE ?=
 PW_SANDBOX    ?= true
 
-.PHONY: help install config plan open snapshot cache cache-delta cache-check audit-plan audit-apply pom handoff clean
+.PHONY: help install config plan record author open snapshot cache cache-delta cache-check audit-plan audit-apply pom handoff clean
 
 help:            ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -60,6 +67,17 @@ config:          ## Write $(WORKDIR)/.playwright/cli.config.json from the vars a
 plan:            ## Cache-first: what does a goal need to explore? (NEEDS=name,name...)
 	@test -n "$(NEEDS)" || { echo "set NEEDS=<comma-separated logical names>"; exit 2; }
 	$(PY) $(SCRIPTS)/plan_goal.py --app "$(APP)" --needs "$(NEEDS)" $(if $(GOAL),--goal "$(GOAL)")
+
+record:          ## No-code: record a flow (headed, LOCAL) → CODEGEN file (needs URL + CODEGEN)
+	@test -n "$(URL)" || { echo "set URL=<app url>"; exit 2; }
+	@test -n "$(CODEGEN)" || { echo "set CODEGEN=<out.spec.ts>"; exit 2; }
+	cd "$(REPO)/e2e" && npx playwright codegen "$(URL)" -o "$(CODEGEN)"
+
+author:          ## Normalize a recording → klew journey + candidate selectors (CODEGEN, NAME)
+	@test -n "$(CODEGEN)" || { echo "set CODEGEN=<recording.spec.ts>"; exit 2; }
+	@test -n "$(NAME)" || { echo "set NAME=<journey slug>"; exit 2; }
+	$(PY) $(SCRIPTS)/author_journey.py --app "$(APP)" --codegen "$(CODEGEN)" \
+	  --name "$(NAME)" $(if $(REQ),--req "$(REQ)") --out-dir "$(OUTDIR)"
 
 open:            ## Open URL in the CLI browser (from WORKDIR so it reads the config)
 	@test -n "$(URL)" || { echo "set URL=<app url>"; exit 2; }

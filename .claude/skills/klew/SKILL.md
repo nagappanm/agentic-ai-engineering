@@ -226,6 +226,26 @@ Two approval styles, same cache:
   The **klew subagent** never opens the PR itself (it has no Write/GitHub tools) —
   it returns the delta candidates and the main session persists + opens the PR.
 
+## Authoring journeys (record → review, no-code)
+
+Lower the barrier for non-coders: **click through a flow, get a reviewable journey
+draft + selector delta** — no hand-written Playwright. Deterministic (no LLM).
+
+```bash
+# 1) Record by clicking (headed, run locally):
+make record URL=<app-url> CODEGEN=/tmp/rec.spec.ts
+# 2) Normalize into a klew journey on the approved Page Object:
+make author APP=<app> CODEGEN=/tmp/rec.spec.ts NAME=<slug> REQ=<TMVC-14>
+#    → e2e/<slug>.spec.ts        (cached locators become POM getters)
+#    → e2e/<slug>.candidates.json (NEW locators, marked in the spec)
+```
+
+Matched locators reuse the approved cache's Page Object getters; any **new**
+locator is emitted inline with a `NEW — approve` marker and collected as a
+candidate. Review the draft, approve the new selectors the normal way
+(`cache_selectors.py --approved --changed-only`), then it's a normal journey in
+the suite / PR gate. See `scripts/author_journey.py`.
+
 ## Accessibility findings (free byproduct)
 
 You navigate via the accessibility tree, so a11y gaps surface naturally: when a
