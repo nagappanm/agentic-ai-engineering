@@ -6,6 +6,7 @@ Standalone-script friendly: each CLI adds its own directory to sys.path[0], so
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import json
 from pathlib import Path
 
@@ -69,3 +70,51 @@ def save_cache(app: str, cache: dict) -> Path:
     f = d / "selectors.json"
     f.write_text(json.dumps(cache, indent=2) + "\n")
     return f
+
+
+# --- knowledge-note durability helpers ----------------------------------------
+
+def cache_signature(cache: dict) -> str:
+    """A stable fingerprint of the cache's *structure*, for knowledge-note drift.
+
+    Hashes only the machine-meaningful shape of each selector — logical name,
+    selector, tier, page, a11y_flag — and DELIBERATELY excludes verified/
+    confidence/status/updated. So a routine `audit_selectors` refresh (which bumps
+    those but changes no selector) does NOT move the signature — the note only
+    reads "stale" when the app's structure genuinely changed.
+    """
+    sels = cache.get("selectors", {})
+    material = [
+        [name, e.get("selector", ""), e.get("tier", ""), e.get("page", ""),
+         bool(e.get("a11y_flag"))]
+        for name, e in sorted(sels.items())
+    ]
+    blob = json.dumps(material, separators=(",", ":"))
+    return "sha256:" + hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+def parse_frontmatter(text: str) -> tuple[dict, str]:
+    """Read a leading '---' YAML block into (frontmatter dict, remaining body).
+
+    Minimal on purpose — handles flat `key: value` and inline `key: [a, b]` lists,
+    strips surrounding quotes. Not a full YAML parser; sufficient for klew's
+    controlled knowledge-note schema (see the durability plan). No new dependency.
+    """
+    if not text.startswith("---"):
+        return {}, text
+    lines = text.splitlines()
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if end is None:
+        return {}, text
+    fm: dict = {}
+    for line in lines[1:end]:
+        s = line.strip()
+        if not s or s.startswith("#") or ":" not in s:
+            continue
+        key, _, val = s.partition(":")
+        key, val = key.strip(), val.strip()
+        if val.startswith("[") and val.endswith("]"):
+            fm[key] = [v.strip().strip("'\"") for v in val[1:-1].split(",") if v.strip()]
+        else:
+            fm[key] = val.strip("'\"")
+    return fm, "\n".join(lines[end + 1:])

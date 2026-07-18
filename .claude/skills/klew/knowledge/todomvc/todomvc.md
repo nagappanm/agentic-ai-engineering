@@ -1,3 +1,11 @@
+---
+app: todomvc
+updated: 2026-07-18
+reconciled_signature: sha256:159534c5858bb1ae
+test_attribute: data-test
+base_url: http://127.0.0.1:8123/
+---
+
 # TodoMVC — application knowledge (worked example)
 
 A real klew run captured against a local **TodoMVC** (the canonical testing web

@@ -1,7 +1,16 @@
+---
+app: <slug>
+updated: <YYYY-MM-DD>
+reconciled_signature: sha256:0000000000000000   # run `make knowledge-check APP=<slug>`; stamp the cache's current signature once the notes match
+test_attribute: data-automation-id
+base_url: https://…
+---
+
 # <App name> — application knowledge
 
 > Rename this file to the app slug (e.g. `acme-portal.md`) and keep it beside
-> `selectors.json`. Update as you explore.
+> `selectors.json`. Update as you explore. The frontmatter above lets
+> `knowledge_check.py` detect when the cache has drifted from these notes.
 
 ## At a glance
 

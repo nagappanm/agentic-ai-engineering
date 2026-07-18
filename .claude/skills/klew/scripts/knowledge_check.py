@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""Deterministic drift check: is an app's knowledge note stale vs its cache?
+
+The selector cache (`selectors.json`) is script-written, approval-gated and
+audited; the knowledge note (`<app>.md`) is hand-authored with none of that. This
+closes the gap WITHOUT auto-writing prose: it reads only the cache + the note's
+frontmatter and reports — deterministically, no browser, no LLM, no API key —
+whether the note has fallen behind. Mirrors `cache_selectors.py --dry-run`.
+
+    knowledge_check.py --app <slug>          # human summary + status line
+    knowledge_check.py --app <slug> --json   # machine-readable verdict
+
+It flags three things:
+  * SIGNATURE — the cache's structure changed since the note's
+    `reconciled_signature` (a NEW/removed/retiered selector; NOT a mere
+    audit/confidence refresh, which by design leaves the signature unchanged).
+  * COVERAGE  — a logical-name area in the cache (`checkout.*`) that the note's
+    prose never mentions.
+  * FACTS     — a frontmatter fact (`base_url`) that disagrees with the cache.
+
+Exit code is always 0 (like `--dry-run`); read the status line / `--json`. This
+is a review signal, not a hard failure — see the durability plan (never silent,
+default amber, never red).
+"""
+from __future__ import annotations
+
+import argparse
+import json
+
+from _common import app_dir, cache_signature, load_cache, parse_frontmatter
+
+# Logical-name prefixes that are not real "areas" worth a documentation section.
+IGNORE_GROUPS = {"recorded"}
+# A prefix must have at least this many selectors to count as a documentable area.
+MIN_GROUP_SIZE = 1
+
+
+def cache_groups(cache: dict, ignore=IGNORE_GROUPS, min_size=MIN_GROUP_SIZE) -> dict[str, int]:
+    """Map each documentable area (top-level logical prefix) → selector count."""
+    counts: dict[str, int] = {}
+    for name in cache.get("selectors", {}):
+        prefix = name.split(".")[0]
+        counts[prefix] = counts.get(prefix, 0) + 1
+    return {g: n for g, n in counts.items() if g not in ignore and n >= min_size}
+
+
+def documented_groups(body: str, groups) -> set[str]:
+    """An area counts as documented when its name appears (case-insensitive) in the prose."""
+    low = body.lower()
+    return {g for g in groups if g.lower() in low}
+
+
+def decide(cache: dict, frontmatter: dict, body: str,
+           ignore=IGNORE_GROUPS, min_size=MIN_GROUP_SIZE) -> dict:
+    """Pure verdict function — trivially unit-tested; the CLI just loads + calls it."""
+    reasons: list[str] = []
+
+    signature = cache_signature(cache)
+    reconciled = frontmatter.get("reconciled_signature")
+    if reconciled != signature:
+        reasons.append(
+            f"cache structure changed since last reconcile "
+            f"(notes={reconciled or 'none'}, cache={signature})"
+        )
+
+    groups = cache_groups(cache, ignore, min_size)
+    undocumented = sorted(set(groups) - documented_groups(body, groups))
+    for g in undocumented:
+        reasons.append(f"undocumented area: {g} ({groups[g]} selector(s), no mention in the notes)")
+
+    cache_base, fm_base = cache.get("base_url"), frontmatter.get("base_url")
+    if cache_base and fm_base and cache_base != fm_base:
+        reasons.append(f"base_url mismatch: notes={fm_base}, cache={cache_base}")
+
+    return {
+        "status": "update-needed" if reasons else "up-to-date",
+        "signature": signature,
+        "reasons": reasons,
+    }
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument("--app", required=True, help="application slug (folder under knowledge/)")
+    ap.add_argument("--json", action="store_true", help="emit the verdict as JSON on stdout")
+    args = ap.parse_args()
+
+    cache = load_cache(args.app)
+    note = app_dir(args.app) / f"{args.app}.md"
+    if note.exists():
+        frontmatter, body = parse_frontmatter(note.read_text())
+    else:
+        frontmatter, body = {}, ""
+
+    result = decide(cache, frontmatter, body)
+    result["app"] = args.app
+    result["note_exists"] = note.exists()
+
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+
+    if not note.exists():
+        print(f"KNOWLEDGE UPDATE NEEDED — no note at knowledge/{args.app}/{args.app}.md "
+              f"(cache signature {result['signature']}). Copy knowledge/_template/app.md.")
+        return
+
+    if result["status"] == "update-needed":
+        print(f"KNOWLEDGE UPDATE NEEDED — {len(result['reasons'])} reason(s):")
+        for r in result["reasons"]:
+            print(f"  - {r}")
+        print(f"Reconcile the notes, then stamp reconciled_signature: {result['signature']}")
+    else:
+        print(f"KNOWLEDGE UP TO DATE — signature matches ({result['signature']}); "
+              "0 undocumented areas.")
+
+
+if __name__ == "__main__":
+    main()
