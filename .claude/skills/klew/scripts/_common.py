@@ -75,7 +75,7 @@ def save_cache(app: str, cache: dict) -> Path:
 
 # --- knowledge-note durability helpers ----------------------------------------
 
-def cache_signature(cache: dict) -> str:
+def cache_signature(cache: dict, area: str | None = None) -> str:
     """A stable fingerprint of the cache's *structure*, for knowledge-note drift.
 
     Hashes only the machine-meaningful shape of each selector — logical name,
@@ -83,12 +83,18 @@ def cache_signature(cache: dict) -> str:
     confidence/status/updated. So a routine `audit_selectors` refresh (which bumps
     those but changes no selector) does NOT move the signature — the note only
     reads "stale" when the app's structure genuinely changed.
+
+    Pass `area` to fingerprint only that area's selectors (per-area file), so a
+    change in `checkout.*` moves only checkout's signature.
     """
     sels = cache.get("selectors", {})
+    items = sorted(sels.items())
+    if area is not None:  # scope to one area's selectors (per-area file signature)
+        items = [(n, e) for n, e in items if area_of(n) == area]
     material = [
         [name, e.get("selector", ""), e.get("tier", ""), e.get("page", ""),
          bool(e.get("a11y_flag"))]
-        for name, e in sorted(sels.items())
+        for name, e in items
     ]
     blob = json.dumps(material, separators=(",", ":"))
     return "sha256:" + hashlib.sha256(blob.encode()).hexdigest()[:16]
@@ -212,3 +218,53 @@ def apply_regions(text: str, regions: dict[str, str]) -> str:
         section += "\n\n".join(to_append) + "\n"
         out = out.rstrip() + "\n" + section
     return out
+
+
+# --- per-area file split (enterprise scale) ------------------------------------
+# For large apps, notes split into knowledge/<app>/areas/<area>.md, each with its
+# OWN reconciled_signature (over that area's selectors) + generated regions, and
+# <app>.md becomes an index. A change in checkout.* then flags only checkout's
+# file and — via CODEOWNERS on that path — only checkout's reviewers.
+
+def areas_dir(app: str) -> Path:
+    return app_dir(app) / "areas"
+
+
+def area_files(app: str) -> dict[str, Path]:
+    """Map area name -> areas/<area>.md path for every area file on disk."""
+    d = areas_dir(app)
+    return {p.stem: p for p in sorted(d.glob("*.md"))} if d.is_dir() else {}
+
+
+def is_split(app: str) -> bool:
+    """True when the app uses the per-area file layout (any areas/*.md present)."""
+    return bool(area_files(app))
+
+
+def subcache(cache: dict, area: str) -> dict:
+    """A view of the cache scoped to one area's selectors (base_url carried over)."""
+    sels = {n: e for n, e in cache.get("selectors", {}).items() if area_of(n) == area}
+    return {"base_url": cache.get("base_url"), "selectors": sels}
+
+
+def render_area_regions(cache: dict, area: str) -> dict[str, str]:
+    """Generated regions for one area file — pages/a11y/selectors, scoped to the area."""
+    regs = render_regions(subcache(cache, area))
+    out = {"pages": regs["pages"], "a11y": regs["a11y"]}
+    for k, v in regs.items():
+        if k.startswith("selectors:"):
+            out["selectors"] = v
+    out.setdefault("selectors", "_None._")
+    return out
+
+
+def render_index_region(cache: dict) -> str:
+    """The 'areas' region for <app>.md — one row per area, linking its file."""
+    counts: dict[str, int] = {}
+    for n in cache.get("selectors", {}):
+        counts[area_of(n)] = counts.get(area_of(n), 0) + 1
+    rows = "\n".join(
+        f"| `{a}` | {counts[a]} | [areas/{a}.md](areas/{a}.md) |" for a in sorted(counts)
+    )
+    header = "| Area | Selectors | Notes |\n| ---- | --------- | ----- |\n"
+    return header + (rows or "| — | 0 | — |")

@@ -173,13 +173,19 @@ Flow integration points:
   `test_pr_gate.py`. Update `pr_gate/README.md` and the `klew-pr-gate.yml` workflow to
   run `knowledge-check` and pass its result.
 
-### U5. `knowledge_scaffold.py` + managed regions + per-area split *(Phase 3 — optional)*
+### U5. `knowledge_scaffold.py` + managed regions *(Phase 3 — shipped)*
 - Generate/refresh frontmatter facts + managed regions from `selectors.json`, editing only
   between markers. `--reconcile` stamps `reconciled_signature`.
-- **Per-area:** emit one managed region + one signature *per top-level logical prefix*;
-  for large apps, write `knowledge/<app>/areas/<area>.md` files with `<app>.md` as an
-  index. `knowledge_check` then reports drift per area, not per whole app.
-- `make knowledge-scaffold APP=<app>`; `knowledge_check` verifies region equality.
+- Per-area *regions* within `<app>.md`; `make knowledge-scaffold APP=<app>`;
+  `knowledge_check` verifies region equality.
+
+### U5b. Per-area *file* split *(follow-up — shipped)*
+- `--split` fans the note into `knowledge/<app>/areas/<area>.md`, each with its **own**
+  `reconciled_signature` (over just that area's selectors) + generated regions, and
+  `<app>.md` as an index. `knowledge_check` auto-detects `areas/` and reports drift per
+  file — flagging missing/orphan area files — so a `checkout.*` change pulls in only the
+  checkout owners (via a repo `CODEOWNERS` rule on that path). `cache_signature(area=…)`
+  scopes the fingerprint. `make knowledge-scaffold APP=<app> SPLIT=1`.
 
 ### U6. Docs
 - Update `SKILL.md §"Knowledge base"` and `.claude/agents/klew.md` to describe the
