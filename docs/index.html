@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>klew — Feature Overview</title>
+<meta name="description" content="A role-by-role tour of everything klew supports — for QA engineers, developers, managers and executives.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='88'%3E%F0%9F%A7%B5%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+<style>
+  /* "The only colour is the signal" — stone-neutral ink on paper; the single
+     chromatic accent is mulberry (deliberately not blue); green/amber/red are
+     reserved strictly for the traffic-light gate so page colour always means. */
+  :root {
+    --paper:#e7e8e5; --surface:#f4f5f2; --surface-2:#edefeb;
+    --ink:#23241f; --muted:#63655d; --faint:#9a9c92; --line:#d7d9d2;
+    --accent:#9c1c58; --accent-weak:#f1dfe8; --accent-ink:#84174a;
+    --green:#2f8f57; --amber:#a97512; --red:#bf4128;
+    --green-bg:#e3f0e7; --amber-bg:#f3ecd7; --red-bg:#f6e3dd;
+    --shadow:0 1px 2px rgba(35,36,31,.06), 0 10px 26px -14px rgba(35,36,31,.20);
+    --radius:13px;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --measure:64ch;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#181915; --surface:#22231e; --surface-2:#2a2b25;
+      --ink:#ecede6; --muted:#a5a79c; --faint:#7b7d72; --line:#33342d;
+      --accent:#e56aa0; --accent-weak:#2c1a23; --accent-ink:#f2a1c6;
+      --green:#57bb80; --amber:#dca648; --red:#e2694a;
+      --green-bg:#132a1d; --amber-bg:#2a2110; --red-bg:#2c1713;
+      --shadow:0 1px 2px rgba(0,0,0,.45), 0 14px 32px -16px rgba(0,0,0,.65);
+    }
+  }
+  :root[data-theme="light"]{
+    --paper:#e7e8e5; --surface:#f4f5f2; --surface-2:#edefeb;
+    --ink:#23241f; --muted:#63655d; --faint:#9a9c92; --line:#d7d9d2;
+    --accent:#9c1c58; --accent-weak:#f1dfe8; --accent-ink:#84174a;
+    --green:#2f8f57; --amber:#a97512; --red:#bf4128;
+    --green-bg:#e3f0e7; --amber-bg:#f3ecd7; --red-bg:#f6e3dd;
+    --shadow:0 1px 2px rgba(35,36,31,.06), 0 10px 26px -14px rgba(35,36,31,.20);
+  }
+  :root[data-theme="dark"]{
+    --paper:#181915; --surface:#22231e; --surface-2:#2a2b25;
+    --ink:#ecede6; --muted:#a5a79c; --faint:#7b7d72; --line:#33342d;
+    --accent:#e56aa0; --accent-weak:#2c1a23; --accent-ink:#f2a1c6;
+    --green:#57bb80; --amber:#dca648; --red:#e2694a;
+    --green-bg:#132a1d; --amber-bg:#2a2110; --red-bg:#2c1713;
+    --shadow:0 1px 2px rgba(0,0,0,.45), 0 14px 32px -16px rgba(0,0,0,.65);
+  }
+
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  .klew{
+    background:var(--paper); color:var(--ink);
+    font-family:var(--sans); font-size:17px; line-height:1.6;
+    -webkit-font-smoothing:antialiased; letter-spacing:.005em;
+  }
+  .klew :is(h1,h2,h3){font-family:var(--serif); font-weight:600; line-height:1.12; text-wrap:balance; margin:0;}
+  .wrap{max-width:1120px; margin:0 auto; padding:0 clamp(20px,5vw,40px);}
+  .eyebrow{font-family:var(--mono); font-size:.72rem; text-transform:uppercase; letter-spacing:.16em; color:var(--accent-ink); margin:0 0 .8rem;}
+  .lede{color:var(--muted); max-width:var(--measure);}
+  a{color:var(--accent-ink); text-underline-offset:3px;}
+  .klew :focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:4px;}
+
+  /* ---- top bar ---- */
+  .bar{position:sticky; top:0; z-index:20; background:color-mix(in srgb,var(--paper) 86%,transparent); backdrop-filter:blur(10px); border-bottom:1px solid var(--line);}
+  .bar-in{display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.85rem clamp(20px,5vw,40px); max-width:1120px; margin:0 auto;}
+  .mark{display:flex; align-items:center; gap:.6rem; font-family:var(--serif); font-weight:600; font-size:1.15rem; letter-spacing:.01em;}
+  .spool{width:22px; height:22px; flex:none;}
+  .bar-tag{font-family:var(--mono); font-size:.7rem; letter-spacing:.08em; color:var(--faint); text-transform:uppercase;}
+  .toggle{font-family:var(--mono); font-size:.72rem; letter-spacing:.06em; color:var(--muted); background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:.4rem .8rem; cursor:pointer;}
+  .toggle:hover{color:var(--ink); border-color:var(--accent);}
+
+  /* ---- hero ---- */
+  .hero{position:relative; overflow:hidden; background:
+      radial-gradient(120% 90% at 88% -10%, color-mix(in srgb,var(--accent) 26%,#1c1a15) 0%, transparent 55%),
+      linear-gradient(180deg,#1e1c1600,#161510 90%), #1c1a15;
+    color:#efeade; border-bottom:1px solid var(--line);}
+  :root[data-theme="light"] .hero, .hero{color:#efeade;}
+  .hero .wrap{position:relative; z-index:2; padding-top:clamp(3.5rem,8vw,6rem); padding-bottom:clamp(3.5rem,8vw,6rem);}
+  .hero h1{font-size:clamp(2.3rem,5.4vw,3.9rem); color:#f7f3ea; letter-spacing:-.01em; max-width:20ch;}
+  .hero .thread-word{color:#ec8fb6; font-style:italic;}
+  .hero .lede{color:#d4cdbd; font-size:clamp(1.05rem,2vw,1.22rem); margin-top:1.3rem; max-width:56ch;}
+  .hero .eyebrow{color:#ec8fb6;}
+  .thread-svg{position:absolute; inset:0; width:100%; height:100%; z-index:1; opacity:.55;}
+  .glance{display:flex; flex-wrap:wrap; gap:1.6rem 2.6rem; margin-top:2.4rem; padding-top:1.6rem; border-top:1px solid rgba(255,255,255,.14);}
+  .glance div{min-width:140px;}
+  .glance b{display:block; font-family:var(--serif); font-size:1.7rem; color:#f8f4ec; line-height:1;}
+  .glance span{font-family:var(--mono); font-size:.7rem; text-transform:uppercase; letter-spacing:.1em; color:#b1ad9e;}
+
+  /* ---- generic section ---- */
+  section{padding:clamp(3.2rem,7vw,5.5rem) 0;}
+  .sec-head{max-width:var(--measure); margin-bottom:2.4rem;}
+  .sec-head h2{font-size:clamp(1.7rem,3.4vw,2.4rem);}
+  .sec-head p{color:var(--muted); margin:.9rem 0 0;}
+
+  /* ---- audience switcher ---- */
+  .aud{background:var(--surface-2); border-top:1px solid var(--line); border-bottom:1px solid var(--line);}
+  .tabs{display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:2rem;}
+  .tab{display:flex; flex-direction:column; align-items:flex-start; gap:.15rem; text-align:left; flex:1 1 200px; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:.85rem 1rem; cursor:pointer; color:var(--muted); transition:border-color .15s, transform .15s, background .15s;}
+  .tab b{font-family:var(--sans); font-weight:650; font-size:1rem; color:var(--ink); letter-spacing:.01em;}
+  .tab span{font-family:var(--mono); font-size:.66rem; text-transform:uppercase; letter-spacing:.09em;}
+  .tab:hover{border-color:var(--accent); transform:translateY(-1px);}
+  .tab[aria-selected="true"]{background:var(--accent-weak); border-color:var(--accent); color:var(--accent-ink);}
+  .tab[aria-selected="true"] b{color:var(--accent-ink);}
+
+  .panel{display:none;}
+  .panel.on{display:block; animation:rise .35s ease both;}
+  @keyframes rise{from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;}}
+  .panel-head{display:flex; flex-wrap:wrap; align-items:baseline; gap:.6rem 1.2rem; margin-bottom:1.6rem;}
+  .panel-head h3{font-size:clamp(1.4rem,2.6vw,1.85rem); max-width:24ch;}
+  .panel-head .who{font-family:var(--mono); font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-ink); background:var(--accent-weak); border:1px solid color-mix(in srgb,var(--accent) 30%,transparent); padding:.25rem .6rem; border-radius:999px; white-space:nowrap;}
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(268px,1fr)); gap:1rem;}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:1.15rem 1.25rem; box-shadow:var(--shadow);}
+  .card h4{margin:0 0 .4rem; font-family:var(--sans); font-weight:650; font-size:1.02rem; letter-spacing:.005em; display:flex; gap:.55rem; align-items:baseline;}
+  .card h4::before{content:""; width:8px; height:8px; border-radius:2px; background:var(--accent); flex:none; transform:translateY(1px);}
+  .card p{margin:0; color:var(--muted); font-size:.95rem;}
+  .takeaway{margin-top:1.5rem; display:flex; gap:.75rem; align-items:flex-start; background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:10px; padding:1rem 1.2rem;}
+  .takeaway .k{font-family:var(--mono); font-size:.66rem; letter-spacing:.1em; text-transform:uppercase; color:var(--accent-ink); flex:none; padding-top:.15rem;}
+  .takeaway p{margin:0; color:var(--ink);}
+
+  /* ---- diagrams ---- */
+  .diagrams{display:grid; gap:1.6rem;}
+  .fig{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:1.6rem clamp(1.1rem,3vw,1.9rem); box-shadow:var(--shadow);}
+  .fig h3{font-family:var(--sans); font-weight:650; font-size:1.05rem; margin:0 0 .3rem;}
+  .fig .cap{color:var(--muted); font-size:.9rem; margin:0 0 1.4rem; max-width:60ch;}
+
+  /* pipeline */
+  .pipe{display:flex; align-items:stretch; gap:0; overflow-x:auto; padding-bottom:.4rem;}
+  .stage{flex:1 1 0; min-width:118px; text-align:center; position:relative; padding:0 .3rem;}
+  .stage .dot{position:relative; height:34px; display:flex; align-items:center; justify-content:center;}
+  .stage .dot::before{content:""; position:absolute; top:50%; left:0; right:0; height:2px; background:var(--line); z-index:0;}
+  .stage:first-child .dot::before{left:50%;}
+  .stage:last-child .dot::before{right:50%;}
+  .stage .bead{position:relative; z-index:1; width:15px; height:15px; border-radius:50%; background:var(--surface); border:2px solid var(--accent);}
+  .stage.term .bead{background:var(--accent);}
+  .stage .lab{margin-top:.6rem; font-family:var(--sans); font-weight:600; font-size:.86rem;}
+  .stage .sub{font-family:var(--mono); font-size:.64rem; color:var(--faint); text-transform:uppercase; letter-spacing:.06em; margin-top:.15rem;}
+
+  /* traffic light gate */
+  .gate{display:grid; grid-template-columns:auto 1fr; gap:.9rem 1.2rem; align-items:center;}
+  .lamp{width:20px; height:20px; border-radius:50%; justify-self:center; box-shadow:0 0 0 4px color-mix(in srgb,currentColor 16%,transparent);}
+  .lamp.g{background:var(--green); color:var(--green);}
+  .lamp.a{background:var(--amber); color:var(--amber);}
+  .lamp.r{background:var(--red); color:var(--red);}
+  .gate .verdict b{font-family:var(--sans); font-weight:650;}
+  .gate .verdict span{display:block; color:var(--muted); font-size:.92rem;}
+  .gate .row{display:contents;}
+
+  /* authoring spectrum */
+  .lanes{display:grid; grid-template-columns:repeat(3,1fr); gap:.8rem; margin-bottom:1rem;}
+  .lane{background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:1rem;}
+  .lane .t{font-family:var(--mono); font-size:.66rem; text-transform:uppercase; letter-spacing:.09em; color:var(--accent-ink); margin-bottom:.4rem;}
+  .lane b{font-weight:650; font-size:.98rem;}
+  .lane p{margin:.3rem 0 0; color:var(--muted); font-size:.88rem;}
+  .converge{text-align:center; font-family:var(--mono); font-size:.72rem; letter-spacing:.06em; color:var(--muted);}
+  .converge b{color:var(--ink);}
+  .converge .pill{display:inline-block; margin-top:.5rem; background:var(--accent-weak); color:var(--accent-ink); border:1px solid color-mix(in srgb,var(--accent) 30%,transparent); border-radius:999px; padding:.35rem .9rem; font-weight:650;}
+
+  /* ---- catalogue ---- */
+  .cat{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:1.1rem;}
+  .group{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:1.3rem 1.4rem; box-shadow:var(--shadow);}
+  .group h3{font-family:var(--sans); font-weight:650; font-size:1.02rem; display:flex; align-items:center; gap:.6rem; margin:0 0 .9rem; padding-bottom:.7rem; border-bottom:1px solid var(--line);}
+  .group h3 .n{font-family:var(--mono); font-size:.7rem; color:var(--accent-ink); background:var(--accent-weak); border-radius:6px; padding:.15rem .45rem;}
+  .group ul{list-style:none; margin:0; padding:0; display:grid; gap:.6rem;}
+  .group li{display:flex; gap:.6rem; font-size:.93rem; color:var(--muted);}
+  .group li::before{content:"—"; color:var(--accent); flex:none;}
+  .group li b{color:var(--ink); font-weight:600;}
+
+  /* ---- footer ---- */
+  .foot{background:#1c1a15; color:#cec7b8; border-top:1px solid var(--line);}
+  .foot .wrap{padding:2.6rem 0 3rem; display:flex; flex-wrap:wrap; gap:1.4rem 2rem; justify-content:space-between; align-items:flex-end;}
+  .foot h3{color:#f7f3ea; font-size:1.2rem; max-width:24ch;}
+  .foot p{margin:.6rem 0 0; color:#a7a293; font-size:.9rem; max-width:52ch;}
+  .foot .chips{display:flex; flex-wrap:wrap; gap:.5rem;}
+  .foot .chip{font-family:var(--mono); font-size:.68rem; letter-spacing:.05em; color:#ded7c8; border:1px solid rgba(255,255,255,.16); border-radius:999px; padding:.35rem .75rem;}
+
+  @media (max-width:640px){
+    .lanes{grid-template-columns:1fr;}
+    .tab{flex-basis:100%;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .panel.on{animation:none;}
+    .thread-dash{animation:none !important;}
+  }
+</style>
+
+<div class="klew">
+
+  <header class="bar">
+    <div class="bar-in">
+      <div class="mark">
+        <svg class="spool" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="9.2" stroke="var(--accent)" stroke-width="1.6"/>
+          <path d="M12 3.2C7 6 7 18 12 20.8M12 3.2C17 6 17 18 12 20.8M3.4 10.5c4.6 2.4 12.6 2.4 17.2 0M3.4 13.5c4.6-2.4 12.6-2.4 17.2 0"
+            stroke="var(--accent)" stroke-width="1.1" opacity=".65"/>
+        </svg>
+        klew
+      </div>
+      <span class="bar-tag">Web-UI testing, governed by design</span>
+      <button class="toggle" id="themeBtn" type="button" aria-label="Switch colour theme">Theme</button>
+    </div>
+  </header>
+
+  <div class="hero">
+    <svg class="thread-svg" viewBox="0 0 1200 500" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <path class="thread-dash" d="M-40 380 C 220 250, 360 470, 620 320 S 1020 140, 1260 260"
+        fill="none" stroke="#d76aa0" stroke-width="1.5" stroke-dasharray="6 10" opacity=".65"/>
+      <path d="M-40 300 C 260 420, 420 180, 680 300 S 1040 420, 1260 300"
+        fill="none" stroke="#9a7d68" stroke-width="1" opacity=".35"/>
+    </svg>
+    <div class="wrap">
+      <p class="eyebrow">Feature overview · read for your role</p>
+      <h1>The <span class="thread-word">thread</span> that keeps automated UI testing reliable, reviewable and yours.</h1>
+      <p class="lede">klew explores a live web application, resolves durable selectors, and turns them into tests that a traffic-light gate merges, reviews or turns into a bug — with a person approving every change. Self-hosted, LLM-agnostic, no licence fee.</p>
+      <div class="glance">
+        <div><b>🟢🟠🔴</b><span>One verdict per pull request</span></div>
+        <div><b>0</b><span>API keys to run the gate</span></div>
+        <div><b>3</b><span>ways to author a journey</span></div>
+        <div><b>In-house</b><span>Your data never leaves</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AUDIENCE SWITCHER -->
+  <section class="aud">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">Choose your seat</p>
+        <h2>The same toolkit, told in your language</h2>
+        <p>klew does one thing well — reliable, governed UI testing — but what matters depends on where you sit. Pick a role to see the capabilities that earn their keep for you.</p>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Audience">
+        <button class="tab" role="tab" aria-selected="true"  aria-controls="p-qa"  id="t-qa"  type="button"><b>QA Engineer</b><span>≈ 1 year in</span></button>
+        <button class="tab" role="tab" aria-selected="false" aria-controls="p-dev" id="t-dev" type="button"><b>Developer</b><span>3–5 years</span></button>
+        <button class="tab" role="tab" aria-selected="false" aria-controls="p-mgr" id="t-mgr" type="button"><b>Engineering Manager</b><span>10 years</span></button>
+        <button class="tab" role="tab" aria-selected="false" aria-controls="p-exec" id="t-exec" type="button"><b>Executive</b><span>20 years</span></button>
+      </div>
+
+      <!-- QA -->
+      <div class="panel on" id="p-qa" role="tabpanel" aria-labelledby="t-qa" tabindex="0">
+        <div class="panel-head">
+          <span class="who">Early-career QA</span>
+          <h3>Write tests that hold up — without wrestling with code or brittle selectors.</h3>
+        </div>
+        <div class="cards">
+          <div class="card"><h4>Author by describing or clicking</h4><p>Describe a journey in plain English, or simply click through it. klew writes the Playwright test for you — no hand-coded locators.</p></div>
+          <div class="card"><h4>Selectors that don't break overnight</h4><p>Tests reuse a shared, approved cache of durable, user-facing locators — so you spend far less time chasing flaky failures.</p></div>
+          <div class="card"><h4>A failure comes with its recipe</h4><p>When a journey fails, klew raises a ticket with the exact reproduction steps, expected-versus-actual, and a link to the spec.</p></div>
+          <div class="card"><h4>Accessibility, flagged for free</h4><p>As it explores, klew points out controls with no accessible name or role — real defects you can log early.</p></div>
+          <div class="card"><h4>Learn the app safely</h4><p>You build on the Page Object others approved, so you pick up the codebase without needing to master its selectors first.</p></div>
+          <div class="card"><h4>Clear pass or fail</h4><p>Every run gives a plain result and a reason — no cryptic stack traces to decode before you can act.</p></div>
+        </div>
+        <div class="takeaway"><span class="k">In short</span><p>Spend your day on test ideas and edge cases — not selector archaeology or firefighting flaky runs.</p></div>
+      </div>
+
+      <!-- DEV -->
+      <div class="panel" id="p-dev" role="tabpanel" aria-labelledby="t-dev" tabindex="0">
+        <div class="panel-head">
+          <span class="who">Mid-level engineer</span>
+          <h3>Tests as code you own — governed, reviewable, and merged by a gate you control.</h3>
+        </div>
+        <div class="cards">
+          <div class="card"><h4>Everything is a reviewable diff</h4><p>Selectors live in Git as an approved JSON cache. Changes arrive as pull requests with a minimal delta — nothing mutates silently.</p></div>
+          <div class="card"><h4>A gate that merges the green ones</h4><p>The traffic-light gate approves and auto-merges clean pull requests, requests review on amber, and raises a bug on red.</p></div>
+          <div class="card"><h4>Deterministic, no API key</h4><p>Journeys, grading and the decision run headless in a GitHub Action. No model calls in the critical path.</p></div>
+          <div class="card"><h4>Token-efficient &amp; model-agnostic</h4><p>Drives the Microsoft Playwright CLI and runs inside any coding agent — cache-first, exploring only the gaps.</p></div>
+          <div class="card"><h4>Page Objects, generated</h4><p>Approved selectors export to a typed Page Object your specs import — so a journey reads like intent, not CSS.</p></div>
+          <div class="card"><h4>Trust-graded output</h4><p>A companion check scores generated tests and catches hallucinated selectors before they ever land.</p></div>
+        </div>
+        <div class="takeaway"><span class="k">In short</span><p>Less test maintenance, and a pipeline you can read end to end — from selector to merge — in your own repository.</p></div>
+      </div>
+
+      <!-- MANAGER -->
+      <div class="panel" id="p-mgr" role="tabpanel" aria-labelledby="t-mgr" tabindex="0">
+        <div class="panel-head">
+          <span class="who">Engineering manager</span>
+          <h3>Predictable releases with visible quality, traceability and control.</h3>
+        </div>
+        <div class="cards">
+          <div class="card"><h4>A traffic-light on every change</h4><p>Each pull request earns a green, amber or red verdict with written reasons. No silent merges; no guesswork about readiness.</p></div>
+          <div class="card"><h4>Traceable to requirements</h4><p>Journeys tie back to Jira acceptance criteria, so coverage gaps against a requirement surface automatically.</p></div>
+          <div class="card"><h4>Governed AI, with an audit trail</h4><p>A person approves every selector; nothing changes without a merge. The full history lives in Git — defensible by design.</p></div>
+          <div class="card"><h4>Maintenance that stays visible</h4><p>When the UI shifts, self-healing appears as a reviewable delta pull request — not silent drift you discover in production.</p></div>
+          <div class="card"><h4>Standards built in</h4><p>Accessibility findings and a test-trust score accompany each change, so quality is measured, not assumed.</p></div>
+          <div class="card"><h4>No per-seat licence</h4><p>Self-hosted, so cost doesn't climb as the team grows — budget stays predictable.</p></div>
+        </div>
+        <div class="takeaway"><span class="k">In short</span><p>Fewer escaped defects, a clear read on release readiness, and risk you can actually govern.</p></div>
+      </div>
+
+      <!-- EXEC -->
+      <div class="panel" id="p-exec" role="tabpanel" aria-labelledby="t-exec" tabindex="0">
+        <div class="panel-head">
+          <span class="who">Executive sponsor</span>
+          <h3>Own a critical capability — control, cost and AI governance, without lock-in.</h3>
+        </div>
+        <div class="cards">
+          <div class="card"><h4>Total cost of ownership</h4><p>Self-hosted and licence-free, against managed suites that run to five figures per year and scale with headcount.</p></div>
+          <div class="card"><h4>Your data stays in the estate</h4><p>Tests execute in your own infrastructure. Nothing about the application under test leaves the building.</p></div>
+          <div class="card"><h4>AI you can defend</h4><p>Human-in-the-loop approval, deterministic gates and a complete audit trail — the answer to "how is AI governed here?"</p></div>
+          <div class="card"><h4>No vendor lock-in</h4><p>Built on open standards — Playwright, GitHub, Jira — and portable across any large language model.</p></div>
+          <div class="card"><h4>Parity on your terms</h4><p>Matches managed platforms on self-healing and low-code authoring, whilst keeping governance and ownership in-house.</p></div>
+          <div class="card"><h4>Board-legible confidence</h4><p>One traffic-light signal per change rolls up into a release-readiness view leadership can actually read.</p></div>
+        </div>
+        <div class="takeaway"><span class="k">In short</span><p>Strategic control of software quality — at a fraction of the cost of a managed subscription, with the governance a regulated business needs.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DIAGRAMS -->
+  <section>
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">How it fits together</p>
+        <h2>Three pictures worth keeping</h2>
+        <p>From a live application to a merged, tested change — and the two devices that make klew distinctive: a decision gate, and three routes to the same governed journey.</p>
+      </div>
+
+      <div class="diagrams">
+
+        <div class="fig">
+          <h3>The pipeline — one thread, end to end</h3>
+          <p class="cap">klew explores the app, a person approves the selectors, they become a Page Object and a journey, and the gate decides what happens to the pull request.</p>
+          <div class="pipe">
+            <div class="stage"><div class="dot"><span class="bead"></span></div><div class="lab">Explore</div><div class="sub">live app</div></div>
+            <div class="stage"><div class="dot"><span class="bead"></span></div><div class="lab">Approve</div><div class="sub">human gate</div></div>
+            <div class="stage"><div class="dot"><span class="bead"></span></div><div class="lab">Cache</div><div class="sub">selectors</div></div>
+            <div class="stage"><div class="dot"><span class="bead"></span></div><div class="lab">Author</div><div class="sub">journey</div></div>
+            <div class="stage"><div class="dot"><span class="bead"></span></div><div class="lab">Grade</div><div class="sub">testguard</div></div>
+            <div class="stage term"><div class="dot"><span class="bead"></span></div><div class="lab">Gate</div><div class="sub">decide</div></div>
+          </div>
+        </div>
+
+        <div class="fig">
+          <h3>The gate — a verdict on every pull request</h3>
+          <p class="cap">Deterministic and reason-backed. The same signal a junior engineer and the board can both read.</p>
+          <div class="gate">
+            <span class="lamp g"></span><div class="verdict"><b>Green — merge automatically</b><span>All journeys pass, the tests grade clean, and the selector cache is unchanged or the change is justified by the requirement.</span></div>
+            <span class="lamp a"></span><div class="verdict"><b>Amber — request review</b><span>Passing, but something wants human eyes: an unjustified selector change, a middling trust score, or a coverage gap.</span></div>
+            <span class="lamp r"></span><div class="verdict"><b>Red — raise a bug</b><span>A journey failed or a selector was hallucinated. klew files a ticket with reproduction steps and links it to the story.</span></div>
+          </div>
+        </div>
+
+        <div class="fig">
+          <h3>Three routes, one governed journey</h3>
+          <p class="cap">Whoever writes the test — and however they write it — the output is the same reviewed, deterministic journey on approved selectors.</p>
+          <div class="lanes">
+            <div class="lane"><div class="t">Code-first</div><b>Write the spec</b><p>Hand-authored Playwright on the generated Page Object. For engineers who want full control.</p></div>
+            <div class="lane"><div class="t">Record</div><b>Click it through</b><p>Record a flow in the browser; klew normalises it onto approved selectors. No code required.</p></div>
+            <div class="lane"><div class="t">Plain English</div><b>Describe it</b><p>State the steps in words; the agent plans, and klew renders a deterministic spec — never a generated UI.</p></div>
+          </div>
+          <div class="converge">all three converge on&nbsp; <span class="pill">one approved, reviewable journey</span></div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- FULL CATALOGUE -->
+  <section class="aud">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">The complete list</p>
+        <h2>Everything klew supports</h2>
+        <p>The full catalogue, grouped by what it does. Every capability below is built, tested and in the repository today.</p>
+      </div>
+      <div class="cat">
+
+        <div class="group">
+          <h3><span class="n">01</span> Exploration &amp; selectors</h3>
+          <ul>
+            <li><b>Token-efficient driving</b> of a live UI via the Microsoft Playwright CLI.</li>
+            <li><b>User-facing selector policy</b> — role and label first, automation-id next, CSS only as a last resort.</li>
+            <li><b>Active-tab root scoping</b> so selectors never collide across open tabs.</li>
+            <li><b>Confidence scoring</b> and <b>accessibility flags</b> on every resolved selector.</li>
+            <li><b>Snapshot diffing</b> to keep exploration lean on tokens.</li>
+          </ul>
+        </div>
+
+        <div class="group">
+          <h3><span class="n">02</span> Governance &amp; cache</h3>
+          <ul>
+            <li><b>Human-approved selector cache</b> — nothing is stored without sign-off.</li>
+            <li><b>Delta-only updates</b>, so a pull request shows just what genuinely changed.</li>
+            <li><b>Dry-run check</b> — "does the cache need updating?" answered deterministically.</li>
+            <li><b>Self-healing audit</b> that re-validates selectors and flags stale or ambiguous ones.</li>
+            <li><b>Page Object export</b> and a per-application <b>knowledge base</b>.</li>
+          </ul>
+        </div>
+
+        <div class="group">
+          <h3><span class="n">03</span> Authoring</h3>
+          <ul>
+            <li><b>Code-first</b> Playwright on the generated Page Object.</li>
+            <li><b>No-code recorder</b> — record a flow, normalise it into a journey.</li>
+            <li><b>Plain-English authoring</b> — a described plan rendered to a deterministic spec.</li>
+            <li><b>Goal-directed, cache-first exploration</b> that drives the browser only for the gaps.</li>
+            <li>Reported as <b>two clear outcomes</b>: goal pass or fail, and whether the cache needs updating.</li>
+          </ul>
+        </div>
+
+        <div class="group">
+          <h3><span class="n">04</span> The pull-request gate</h3>
+          <ul>
+            <li><b>Traffic-light verdict</b> on every pull request — green, amber or red.</li>
+            <li><b>Auto-merge on green</b>, <b>review on amber</b>, <b>bug on red</b>.</li>
+            <li><b>Requirement-justified</b> cache updates — a selector change must fit the requirement.</li>
+            <li>Runs as a <b>GitHub Action</b>, deterministically, with no API key.</li>
+            <li>Configurable <b>base URL</b> — build-and-serve, or a per-branch preview.</li>
+          </ul>
+        </div>
+
+        <div class="group">
+          <h3><span class="n">05</span> Quality &amp; traceability</h3>
+          <ul>
+            <li><b>Test-trust grading</b> that scores generated tests out of 100.</li>
+            <li><b>Hallucinated-selector detection</b> against the live application.</li>
+            <li><b>Requirement traceability</b> back to Jira acceptance criteria.</li>
+            <li><b>LLM-readable bug reports</b> to Jira or GitHub — with reproduction, de-duplication and link-to-story.</li>
+            <li><b>Accessibility findings</b> surfaced as a by-product of exploration.</li>
+          </ul>
+        </div>
+
+        <div class="group">
+          <h3><span class="n">06</span> Delivery model</h3>
+          <ul>
+            <li>Available as both a <b>skill</b> and an autonomous <b>sub-agent</b>.</li>
+            <li><b>Self-hosted</b> — your data stays in your infrastructure.</li>
+            <li><b>LLM-agnostic</b> — portable across any model or coding agent.</li>
+            <li><b>Open standards</b> throughout — Playwright, GitHub, Jira.</li>
+            <li><b>Licence-free</b>, with cost that doesn't scale per seat.</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <div class="wrap">
+      <div>
+        <h3>One thread, from the first click to a merged release.</h3>
+        <p>klew keeps automated UI testing reliable and reviewable — and keeps you in control of the tools, the data and the decisions.</p>
+      </div>
+      <div class="chips">
+        <span class="chip">Self-hosted</span>
+        <span class="chip">Human-approved</span>
+        <span class="chip">Deterministic gate</span>
+        <span class="chip">No lock-in</span>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  (function(){
+    // Theme toggle — override the OS preference in both directions.
+    var root = document.documentElement, btn = document.getElementById('themeBtn');
+    function current(){
+      var set = root.getAttribute('data-theme');
+      if (set) return set;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    btn.addEventListener('click', function(){
+      var next = current() === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+    });
+
+    // Audience tabs
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
+    function select(tab){
+      tabs.forEach(function(t){
+        var on = t === tab;
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+        var panel = document.getElementById(t.getAttribute('aria-controls'));
+        panel.classList.toggle('on', on);
+      });
+    }
+    tabs.forEach(function(t, i){
+      t.addEventListener('click', function(){ select(t); });
+      t.addEventListener('keydown', function(e){
+        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+        e.preventDefault();
+        var dir = e.key === 'ArrowRight' ? 1 : -1;
+        var next = tabs[(i + dir + tabs.length) % tabs.length];
+        next.focus(); select(next);
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>
