@@ -47,6 +47,53 @@ def test_green_with_justified_delta_commits():
     assert v["light"] == "green" and v["commit_delta"] is True
 
 
+# ---- knowledge-note drift signal (Phase 2) ----
+
+
+def test_knowledge_stale_turns_green_to_orange():
+    v = gate.decide(
+        _journeys(10), _tg(mean=100), cache_update_needed=False, justified=None,
+        config=CONFIG, knowledge_stale=True,
+    )
+    assert v["light"] == "orange"
+    assert any("knowledge note stale" in r for r in v["reasons"])
+
+
+def test_knowledge_stale_info_mode_stays_green_with_note():
+    cfg = {**CONFIG, "knowledge_drift": "info"}
+    v = gate.decide(
+        _journeys(10), _tg(mean=100), cache_update_needed=False, justified=None,
+        config=cfg, knowledge_stale=True,
+    )
+    assert v["light"] == "green"
+    assert any("knowledge note stale" in n for n in v["notes"])
+
+
+def test_knowledge_stale_never_causes_red():
+    v = gate.decide(
+        _journeys(10), _tg(mean=100), cache_update_needed=False, justified=None,
+        config=CONFIG, knowledge_stale=True,
+    )
+    assert v["light"] != "red"
+
+
+def test_knowledge_stale_does_not_downgrade_a_real_red():
+    v = gate.decide(
+        _journeys(9, 1), _tg(mean=100), cache_update_needed=False, justified=None,
+        config=CONFIG, knowledge_stale=True,
+    )
+    assert v["light"] == "red"
+    assert any("knowledge note stale" in n for n in v.get("notes", []))
+
+
+def test_knowledge_fresh_leaves_verdict_and_notes_clean():
+    v = gate.decide(
+        _journeys(10), _tg(mean=100), cache_update_needed=False, justified=None,
+        config=CONFIG, knowledge_stale=False,
+    )
+    assert v["light"] == "green" and v.get("notes", []) == []
+
+
 def test_red_on_failed_journey():
     v = gate.decide(
         _journeys(19, 1), _tg(mean=100), cache_update_needed=False, justified=None, config=CONFIG

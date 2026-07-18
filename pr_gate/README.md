@@ -20,11 +20,17 @@ journeys (Output ① PASS/FAIL) + testguard grade + cache dry-run (Output ②) +
 | Light | When |
 |---|---|
 | 🔴 red | a journey failed · any **high**-severity testguard finding · hallucinated selector (TG100) · `meanScore < threshold` |
-| 🟠 orange | cache delta **UPDATE NEEDED but not justified** · **medium** findings · uncovered requirements · `threshold ≤ meanScore < green_score` |
+| 🟠 orange | cache delta **UPDATE NEEDED but not justified** · **medium** findings · uncovered requirements · **knowledge note stale vs cache** · `threshold ≤ meanScore < green_score` |
 | 🟢 green | all journeys pass · testguard clean (`≥ green_score`, no high/medium) · cache up to date **or** delta justified |
 
 Exit codes encode the light for CI: **0 green / 10 orange / 20 red**. Bands live
 in `pr-gate.config.json` (`threshold=70`, `green_score=85`).
+
+**Knowledge-note drift** (`--knowledge-status`, from `knowledge_check.py`): a stale
+app knowledge note is a *documentation-freshness* signal — it can push green→orange
+(review), **never red** (it is not a product defect). Set `knowledge_drift: "info"`
+in `pr-gate.config.json` to surface it as a non-gating note instead (still printed,
+never silent); omit the input entirely to opt out.
 
 ## Modules
 

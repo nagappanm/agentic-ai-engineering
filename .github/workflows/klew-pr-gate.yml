@@ -101,6 +101,18 @@ jobs:
             echo "justified=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Knowledge note fresh? (docs drift vs the selector cache)
+        id: knowledge
+        continue-on-error: true
+        run: |
+          APP=$(python -c "import json;print(json.load(open('pr_gate/pr-gate.config.json')).get('app_cache',''))")
+          if [ -n "$APP" ]; then
+            STATUS=$(python .claude/skills/klew/scripts/knowledge_check.py --app "$APP" | head -1)
+          else
+            STATUS="KNOWLEDGE UP TO DATE"
+          fi
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+
       - name: Decide traffic light
         id: gate
         run: |
@@ -109,6 +121,7 @@ jobs:
             --journeys results.json --testguard testguard.json \
             --cache-status "${{ steps.cache.outputs.status }}" \
             --justified "${{ steps.cache.outputs.justified }}" \
+            --knowledge-status "${{ steps.knowledge.outputs.status }}" \
             --emit-bugs /tmp/bugs --pr "$PR" --base-url "$BASE_URL" \
             --json > verdict.json
           code=$?

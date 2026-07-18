@@ -35,6 +35,7 @@ import sys
 from _common import (
     A11Y_FLAG_TIERS,
     VALID_TIERS,
+    cache_signature,
     confidence,
     load_cache,
     save_cache,
@@ -180,6 +181,11 @@ def main() -> None:
     flagged = [n for n, e in selectors.items() if e.get("a11y_flag")]
     if flagged:
         print(f"  a11y review (non-user-facing locator): {', '.join(sorted(flagged))}")
+    # Nudge (never a write): the structure changed, so the knowledge note may need a look.
+    print(
+        f"  ↳ knowledge note may be stale — cache signature is now {cache_signature(cache)}; "
+        f"run `make knowledge-check APP={args.app}`."
+    )
 
 
 if __name__ == "__main__":

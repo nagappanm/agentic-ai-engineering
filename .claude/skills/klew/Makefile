@@ -44,7 +44,7 @@ TESTID_ATTR   ?= data-testid
 PW_EXECUTABLE ?=
 PW_SANDBOX    ?= true
 
-.PHONY: help install config plan record author author-nl open snapshot cache cache-delta cache-check audit-plan audit-apply pom handoff clean
+.PHONY: help install config plan record author author-nl open snapshot cache cache-delta cache-check knowledge-check knowledge-scaffold audit-plan audit-apply pom handoff clean
 
 help:            ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -104,6 +104,12 @@ cache-delta:     ## Write only NEW/CHANGED selectors (for a PR diff; still needs
 
 cache-check:     ## Does the JSON need updating? Dry-run a delta (no write, no APPROVED)
 	$(PY) $(SCRIPTS)/cache_selectors.py --app "$(APP)" --dry-run --changed-only --input "$(CANDIDATES)"
+
+knowledge-check: ## Is the app's knowledge note stale vs the cache? (deterministic, no write)
+	$(PY) $(SCRIPTS)/knowledge_check.py --app "$(APP)" $(if $(JSON),--json)
+
+knowledge-scaffold: ## Regenerate the note's auto regions from the cache (RECONCILE=1 stamps signature)
+	$(PY) $(SCRIPTS)/knowledge_scaffold.py --app "$(APP)" $(if $(RECONCILE),--reconcile) $(if $(CHECK),--check)
 
 audit-plan:      ## Print the live re-validation checklist for a cached app
 	$(PY) $(SCRIPTS)/audit_selectors.py --app "$(APP)" --plan
