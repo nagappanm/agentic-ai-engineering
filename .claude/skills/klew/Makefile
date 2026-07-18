@@ -108,8 +108,8 @@ cache-check:     ## Does the JSON need updating? Dry-run a delta (no write, no A
 knowledge-check: ## Is the app's knowledge note stale vs the cache? (deterministic, no write)
 	$(PY) $(SCRIPTS)/knowledge_check.py --app "$(APP)" $(if $(JSON),--json)
 
-knowledge-scaffold: ## Regenerate the note's auto regions from the cache (RECONCILE=1 stamps signature)
-	$(PY) $(SCRIPTS)/knowledge_scaffold.py --app "$(APP)" $(if $(RECONCILE),--reconcile) $(if $(CHECK),--check)
+knowledge-scaffold: ## Regenerate note auto regions (RECONCILE=1 stamps signature; SPLIT=1 per-area files)
+	$(PY) $(SCRIPTS)/knowledge_scaffold.py --app "$(APP)" $(if $(RECONCILE),--reconcile) $(if $(CHECK),--check) $(if $(SPLIT),--split)
 
 audit-plan:      ## Print the live re-validation checklist for a cached app
 	$(PY) $(SCRIPTS)/audit_selectors.py --app "$(APP)" --plan

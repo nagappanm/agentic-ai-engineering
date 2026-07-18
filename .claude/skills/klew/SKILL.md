@@ -358,6 +358,18 @@ So the split is: **generated + verified** (frontmatter facts + `klew:auto` regio
 kept honest by `knowledge_check`) vs. **hand-written prose** (the non-derivable
 narrative). Refresh regions with the scaffolder; write only the story yourself.
 
+**Per-area files (large apps).** Add `--split` and the note fans out into
+`knowledge/<app>/areas/<area>.md`, one file per area — each with its **own**
+`reconciled_signature` (over just that area's selectors) and generated regions —
+with `<app>.md` as an index. A change in `checkout.*` then flags only
+`areas/checkout.md`, and (via a repo `CODEOWNERS` rule on that path) pulls in only
+that area's reviewers. `knowledge_check` auto-detects the layout once `areas/`
+exists.
+
+```bash
+make knowledge-scaffold APP=<app> SPLIT=1 RECONCILE=1   # create/refresh per-area files
+```
+
 ## Boundaries
 
 - Drives a **live** browser — needs a reachable, running app and network access.

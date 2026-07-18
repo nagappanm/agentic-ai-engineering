@@ -29,10 +29,15 @@ import json
 
 from _common import (
     app_dir,
+    area_files,
+    area_of,
     cache_signature,
     extract_regions,
+    is_split,
     load_cache,
     parse_frontmatter,
+    render_area_regions,
+    render_index_region,
     render_regions,
 )
 
@@ -99,6 +104,50 @@ def decide(cache: dict, frontmatter: dict, body: str,
     }
 
 
+def check_split(app: str, cache: dict) -> dict:
+    """Per-area verdict — check the index + each area file, localizing drift by file."""
+    reasons: list[str] = []
+    files = area_files(app)
+    cache_areas = {area_of(n) for n in cache.get("selectors", {})}
+
+    idx = app_dir(app) / f"{app}.md"
+    if idx.exists():
+        fm, body = parse_frontmatter(idx.read_text())
+        if fm.get("reconciled_signature") != cache_signature(cache):
+            reasons.append(f"{app}.md (index): area set changed since reconcile")
+        present = extract_regions(body)
+        if "areas" in present and present["areas"].strip() != render_index_region(cache).strip():
+            reasons.append(f"{app}.md (index): 'areas' region out of date")
+    else:
+        reasons.append(f"missing index file {app}.md")
+
+    for area in sorted(cache_areas):
+        p = files.get(area)
+        if p is None:
+            reasons.append(f"missing area file areas/{area}.md ({area}.* in cache)")
+            continue
+        fm, body = parse_frontmatter(p.read_text())
+        if fm.get("reconciled_signature") != cache_signature(cache, area):
+            reasons.append(f"areas/{area}.md: {area}.* structure changed since reconcile")
+        expected, present = render_area_regions(cache, area), extract_regions(body)
+        for name, content in expected.items():
+            if name not in present:
+                reasons.append(f"areas/{area}.md: region '{name}' missing")
+            elif present[name].strip() != content.strip():
+                reasons.append(f"areas/{area}.md: region '{name}' out of date")
+
+    for area in files:
+        if area not in cache_areas:
+            reasons.append(f"orphan area file areas/{area}.md ({area}.* not in cache)")
+
+    return {
+        "status": "update-needed" if reasons else "up-to-date",
+        "signature": cache_signature(cache),
+        "reasons": reasons,
+        "mode": "split",
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -109,20 +158,24 @@ def main() -> None:
 
     cache = load_cache(args.app)
     note = app_dir(args.app) / f"{args.app}.md"
-    if note.exists():
-        frontmatter, body = parse_frontmatter(note.read_text())
-    else:
-        frontmatter, body = {}, ""
 
-    result = decide(cache, frontmatter, body)
-    result["app"] = args.app
-    result["note_exists"] = note.exists()
+    if is_split(args.app):
+        result = check_split(args.app, cache)
+        result["app"], result["note_exists"] = args.app, True
+    else:
+        if note.exists():
+            frontmatter, body = parse_frontmatter(note.read_text())
+        else:
+            frontmatter, body = {}, ""
+        result = decide(cache, frontmatter, body)
+        result["app"] = args.app
+        result["note_exists"] = note.exists()
 
     if args.json:
         print(json.dumps(result, indent=2))
         return
 
-    if not note.exists():
+    if not result["note_exists"]:
         print(f"KNOWLEDGE UPDATE NEEDED — no note at knowledge/{args.app}/{args.app}.md "
               f"(cache signature {result['signature']}). Copy knowledge/_template/app.md.")
         return
@@ -133,8 +186,8 @@ def main() -> None:
             print(f"  - {r}")
         print(f"Reconcile the notes, then stamp reconciled_signature: {result['signature']}")
     else:
-        print(f"KNOWLEDGE UP TO DATE — signature matches ({result['signature']}); "
-              "0 undocumented areas.")
+        extra = "" if result.get("mode") == "split" else "; 0 undocumented areas"
+        print(f"KNOWLEDGE UP TO DATE — signature matches ({result['signature']}){extra}.")
 
 
 if __name__ == "__main__":
