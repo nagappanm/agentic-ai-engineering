@@ -1,6 +1,7 @@
 {
   "threshold": 70,
   "green_score": 85,
+  "knowledge_drift": "orange",
   "ui_globs": [
     "**/*.html",
     "**/*.htm",

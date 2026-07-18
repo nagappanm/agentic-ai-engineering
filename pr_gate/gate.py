@@ -40,6 +40,7 @@ def load_config(path: str | None) -> dict:
     cfg = json.loads(p.read_text()) if p.exists() else {}
     cfg.setdefault("threshold", 70)
     cfg.setdefault("green_score", 85)
+    cfg.setdefault("knowledge_drift", "orange")  # stale-note handling: orange | info
     return cfg
 
 
@@ -107,15 +108,26 @@ def decide(
     cache_update_needed: bool,
     justified: bool | None,
     config: dict,
+    knowledge_stale: bool = False,
 ) -> dict:
-    """Pure traffic-light decision. Returns {light, reasons, ...}. First match wins."""
+    """Pure traffic-light decision. Returns {light, reasons, ...}. First match wins.
+
+    A stale knowledge note (`knowledge_stale`) is a *documentation-freshness*
+    signal, never a product defect: it can push GREEN→ORANGE (request review) but
+    never RED, and per `knowledge_drift` config it can be downgraded to a
+    non-gating informational note (still surfaced, never silent). See the
+    knowledge-durability plan.
+    """
     green_score = config.get("green_score", 85)
+    knowledge_drift = config.get("knowledge_drift", "orange")  # "orange" gates | "info" surfaces
+    knowledge_msg = "knowledge note stale vs cache — review the app notes"
+    info_note = [knowledge_msg] if (knowledge_stale and knowledge_drift != "orange") else []
     reasons: list[str] = []
 
     failed = [j for j in journeys if j["status"] != "passed"]
     s = summarize_testguard(tg)
 
-    # ---- RED ----
+    # ---- RED ---- (knowledge drift never causes red; surfaced as a note if present)
     if failed:
         reasons.append(f"{len(failed)} journey(s) failed: {', '.join(j['id'] for j in failed)}")
     if s["high"]:
@@ -125,7 +137,9 @@ def decide(
     if not s["passed"] or s["meanScore"] < s["threshold"]:
         reasons.append(f"testguard below threshold (meanScore {s['meanScore']} < {s['threshold']})")
     if reasons:
-        return {"light": "red", "reasons": reasons, "failed_journeys": failed, "testguard": s}
+        notes = [knowledge_msg] if knowledge_stale else []
+        return {"light": "red", "reasons": reasons, "failed_journeys": failed,
+                "testguard": s, "notes": notes}
 
     # ---- ORANGE ----
     if cache_update_needed and not justified:
@@ -138,10 +152,12 @@ def decide(
         reasons.append(f"uncovered requirements: {', '.join(s['uncovered'])}")
     if s["meanScore"] < green_score:
         reasons.append(f"testguard meanScore {s['meanScore']} in caution band (< {green_score})")
+    if knowledge_stale and knowledge_drift == "orange":
+        reasons.append(knowledge_msg)
     if reasons:
-        return {"light": "orange", "reasons": reasons, "testguard": s}
+        return {"light": "orange", "reasons": reasons, "testguard": s, "notes": info_note}
 
-    # ---- GREEN ----
+    # ---- GREEN ---- (knowledge_stale here only in "info" mode; surfaced as a note)
     note = "cache up to date" if not cache_update_needed else "cache delta justified"
     return {
         "light": "green",
@@ -150,6 +166,7 @@ def decide(
         ],
         "testguard": s,
         "commit_delta": bool(cache_update_needed and justified),
+        "notes": info_note,
     }
 
 
@@ -163,6 +180,10 @@ def main() -> None:
         "--cache-status", default="CACHE UP TO DATE", help="cache_selectors --dry-run line"
     )
     ap.add_argument("--justified", choices=["true", "false"], help="justify.py verdict (if delta)")
+    ap.add_argument(
+        "--knowledge-status", default="",
+        help="the line printed by knowledge_check.py (KNOWLEDGE UP TO DATE / UPDATE NEEDED)",
+    )
     ap.add_argument("--config", default=None)
     ap.add_argument("--json", action="store_true", help="emit verdict JSON on stdout")
     ap.add_argument(
@@ -179,8 +200,9 @@ def main() -> None:
         "UPDATE NEEDED" in args.cache_status.upper() or "NEEDED" in args.cache_status.upper()
     )
     justified = None if args.justified is None else args.justified == "true"
+    knowledge_stale = "UPDATE NEEDED" in args.knowledge_status.upper()
 
-    verdict = decide(journeys, tg, cache_update_needed, justified, config)
+    verdict = decide(journeys, tg, cache_update_needed, justified, config, knowledge_stale)
     verdict["summary"] = {
         "journeys": len(journeys),
         "passed": sum(1 for j in journeys if j["status"] == "passed"),
@@ -213,6 +235,8 @@ def main() -> None:
         print(f"{icon} {verdict['light'].upper()}")
         for r in verdict["reasons"]:
             print(f"  - {r}")
+        for n in verdict.get("notes", []):
+            print(f"  · note: {n}")
 
     # Exit code encodes the light for CI branching: 0 green, 10 orange, 20 red.
     sys.exit({"green": 0, "orange": 10, "red": 20}[verdict["light"]])
