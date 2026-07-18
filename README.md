@@ -35,7 +35,7 @@ things up, and can prove how good it is.
 | 07 | Evals                 | Score faithfulness & relevance on a golden set        | How you *know* the system works          | `v7-evals`    | ⬜ |
 | 08 | Full agentic system   | Planner + retriever + critic, with memory & logging   | Putting it all together                  | `v8-agent`    | ⬜ |
 
-See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the detailed build plan, and
+See [`docs/build-roadmap.md`](docs/build-roadmap.md) for the detailed build plan, and
 [`docs/`](docs/) for the learning notes written alongside each module.
 
 > **Companion project — [`yilsf/`](yilsf/):** the **Yoga-Inspired LLM Stability
@@ -102,7 +102,7 @@ agentic-ai-engineering/
 │       ├── config.py         # settings & model selection
 │       └── llm.py            # Module 1: the bare LLM call
 ├── docs/
-│   ├── ROADMAP.md            # the 8-module build plan
+│   ├── build-roadmap.md      # the 8-module build plan
 │   └── module-01.md          # learning notes for Module 1
 ├── tests/                    # fast, offline unit tests
 └── yilsf/                    # companion: Yoga-Inspired LLM Stability Framework (TypeScript)
