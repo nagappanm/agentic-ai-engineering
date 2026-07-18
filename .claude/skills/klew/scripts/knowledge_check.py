@@ -27,7 +27,14 @@ from __future__ import annotations
 import argparse
 import json
 
-from _common import app_dir, cache_signature, load_cache, parse_frontmatter
+from _common import (
+    app_dir,
+    cache_signature,
+    extract_regions,
+    load_cache,
+    parse_frontmatter,
+    render_regions,
+)
 
 # Logical-name prefixes that are not real "areas" worth a documentation section.
 IGNORE_GROUPS = {"recorded"}
@@ -71,6 +78,19 @@ def decide(cache: dict, frontmatter: dict, body: str,
     cache_base, fm_base = cache.get("base_url"), frontmatter.get("base_url")
     if cache_base and fm_base and cache_base != fm_base:
         reasons.append(f"base_url mismatch: notes={fm_base}, cache={cache_base}")
+
+    # Generated-region equality — only for notes that have adopted the markers.
+    present = extract_regions(body)
+    if present:
+        expected = render_regions(cache)
+        for name, content in expected.items():
+            if name not in present:
+                reasons.append(f"managed region '{name}' missing (run knowledge-scaffold)")
+            elif present[name].strip() != content.strip():
+                reasons.append(f"managed region '{name}' out of date (run knowledge-scaffold)")
+        for name in present:
+            if name not in expected:
+                reasons.append(f"stale managed region '{name}' (area gone? run knowledge-scaffold)")
 
     return {
         "status": "update-needed" if reasons else "up-to-date",

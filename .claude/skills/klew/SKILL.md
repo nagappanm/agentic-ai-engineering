@@ -338,9 +338,25 @@ python .claude/skills/klew/scripts/knowledge_check.py --app <app>   # make knowl
 
 It flags a **signature** change (a new/removed/retiered selector — a plain
 `audit_selectors` refresh does NOT trip it), an **undocumented area** (a
-`checkout.*` group the prose never mentions), or a **base_url mismatch**. After you
-reconcile the notes, stamp the printed signature into `reconciled_signature`. This
-is a review signal, not a hard gate — the note stays hand-authored.
+`checkout.*` group the prose never mentions), a **base_url mismatch**, or an
+out-of-date **generated region** (see below). After you reconcile the notes, stamp
+the printed signature into `reconciled_signature`. This is a review signal, not a
+hard gate — the note stays hand-authored.
+
+**Generating the derivable parts (scaffolder).** You don't hand-write the facts a
+machine can derive. `knowledge_scaffold.py` writes the route table, the a11y
+rollup, and one selector list **per area** between `<!-- klew:auto -->` markers —
+touching nothing outside them, so your prose (auth, flows, gotchas) is preserved:
+
+```bash
+python .claude/skills/klew/scripts/knowledge_scaffold.py --app <app>              # refresh regions
+python .claude/skills/klew/scripts/knowledge_scaffold.py --app <app> --reconcile  # + stamp signature
+# make knowledge-scaffold APP=<app> [RECONCILE=1] [CHECK=1]
+```
+
+So the split is: **generated + verified** (frontmatter facts + `klew:auto` regions,
+kept honest by `knowledge_check`) vs. **hand-written prose** (the non-derivable
+narrative). Refresh regions with the scaffolder; write only the story yourself.
 
 ## Boundaries
 
