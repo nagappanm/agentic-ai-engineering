@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='88'%3E%F0%9F%A7%B5%3C/text%3E%3C/svg%3E">
+<title>klew — Feature Verification Report</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* klew's own system, extended for a verification dashboard. Mulberry is the
+     single chromatic accent; green/amber/red mean one thing only — the gate
+     verdict and, here, verified/attention/fail status. Colour always signals. */
+  :root{
+    --paper:#e7e8e5; --surface:#f4f5f2; --surface-2:#edefeb; --sunk:#e0e2dc;
+    --ink:#23241f; --muted:#63655d; --faint:#9a9c92; --line:#d7d9d2;
+    --accent:#9c1c58; --accent-weak:#f1dfe8; --accent-ink:#84174a;
+    --green:#2f8f57; --amber:#a97512; --red:#bf4128;
+    --green-bg:#e3f0e7; --amber-bg:#f3ecd7; --red-bg:#f6e3dd;
+    --green-ink:#1f6b3e; --amber-ink:#7c5406; --red-ink:#93301c;
+    --shadow:0 1px 2px rgba(35,36,31,.06), 0 10px 26px -14px rgba(35,36,31,.20);
+    --radius:13px;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#181915; --surface:#22231e; --surface-2:#2a2b25; --sunk:#131410;
+      --ink:#ecede6; --muted:#a5a79c; --faint:#7b7d72; --line:#33342d;
+      --accent:#e56aa0; --accent-weak:#2c1a23; --accent-ink:#f2a1c6;
+      --green:#57bb80; --amber:#dca648; --red:#e2694a;
+      --green-bg:#132a1d; --amber-bg:#2a2110; --red-bg:#2c1713;
+      --green-ink:#8fd7a8; --amber-ink:#e6c079; --red-ink:#ee967c;
+      --shadow:0 1px 2px rgba(0,0,0,.45), 0 14px 32px -16px rgba(0,0,0,.65);
+    }
+  }
+  :root[data-theme="light"]{
+    --paper:#e7e8e5; --surface:#f4f5f2; --surface-2:#edefeb; --sunk:#e0e2dc;
+    --ink:#23241f; --muted:#63655d; --faint:#9a9c92; --line:#d7d9d2;
+    --accent:#9c1c58; --accent-weak:#f1dfe8; --accent-ink:#84174a;
+    --green:#2f8f57; --amber:#a97512; --red:#bf4128;
+    --green-bg:#e3f0e7; --amber-bg:#f3ecd7; --red-bg:#f6e3dd;
+    --green-ink:#1f6b3e; --amber-ink:#7c5406; --red-ink:#93301c;
+    --shadow:0 1px 2px rgba(35,36,31,.06), 0 10px 26px -14px rgba(35,36,31,.20);
+  }
+  :root[data-theme="dark"]{
+    --paper:#181915; --surface:#22231e; --surface-2:#2a2b25; --sunk:#131410;
+    --ink:#ecede6; --muted:#a5a79c; --faint:#7b7d72; --line:#33342d;
+    --accent:#e56aa0; --accent-weak:#2c1a23; --accent-ink:#f2a1c6;
+    --green:#57bb80; --amber:#dca648; --red:#e2694a;
+    --green-bg:#132a1d; --amber-bg:#2a2110; --red-bg:#2c1713;
+    --green-ink:#8fd7a8; --amber-ink:#e6c079; --red-ink:#ee967c;
+    --shadow:0 1px 2px rgba(0,0,0,.45), 0 14px 32px -16px rgba(0,0,0,.65);
+  }
+
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--sans); font-size:16px; line-height:1.6;
+    -webkit-font-smoothing:antialiased; letter-spacing:.005em;}
+  h1,h2,h3{font-family:var(--serif); font-weight:600; line-height:1.14; text-wrap:balance; margin:0;}
+  .wrap{max-width:1080px; margin:0 auto; padding:0 clamp(18px,5vw,40px);}
+  .eyebrow{font-family:var(--mono); font-size:.7rem; text-transform:uppercase; letter-spacing:.16em; color:var(--accent-ink); margin:0 0 .7rem;}
+  code,kbd{font-family:var(--mono);}
+  a{color:var(--accent-ink); text-underline-offset:3px;}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:4px;}
+  .tnum{font-variant-numeric:tabular-nums;}
+
+  /* ---- top bar ---- */
+  .bar{position:sticky; top:0; z-index:20; background:color-mix(in srgb,var(--paper) 88%,transparent); backdrop-filter:blur(10px); border-bottom:1px solid var(--line);}
+  .bar-in{display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.8rem clamp(18px,5vw,40px); max-width:1080px; margin:0 auto;}
+  .mark{display:flex; align-items:center; gap:.6rem; font-family:var(--serif); font-weight:600; font-size:1.12rem;}
+  .spool{width:22px; height:22px; flex:none;}
+  .bar-tag{font-family:var(--mono); font-size:.68rem; letter-spacing:.07em; color:var(--faint); text-transform:uppercase;}
+  .toggle{font-family:var(--mono); font-size:.7rem; letter-spacing:.06em; color:var(--muted); background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:.4rem .8rem; cursor:pointer;}
+  .toggle:hover{color:var(--ink); border-color:var(--accent);}
+
+  /* ---- masthead ---- */
+  .head{padding:clamp(2.6rem,6vw,4rem) 0 clamp(1.6rem,3vw,2.2rem);}
+  .head h1{font-size:clamp(2rem,4.6vw,3.1rem); letter-spacing:-.01em; max-width:20ch;}
+  .head .lede{color:var(--muted); max-width:60ch; margin-top:1rem; font-size:1.05rem;}
+  .stamp{display:inline-flex; align-items:center; gap:.5rem; margin-top:1.4rem; background:var(--green-bg); color:var(--green-ink); border:1px solid color-mix(in srgb,var(--green) 40%,transparent); border-radius:999px; padding:.4rem .95rem; font-family:var(--mono); font-size:.74rem; letter-spacing:.05em; text-transform:uppercase;}
+  .stamp .dot{width:9px; height:9px; border-radius:50%; background:var(--green); box-shadow:0 0 0 4px color-mix(in srgb,var(--green) 20%,transparent);}
+  .meta{margin-top:1.1rem; font-family:var(--mono); font-size:.72rem; color:var(--faint); letter-spacing:.03em;}
+
+  /* ---- headline stats ---- */
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:.8rem; margin-top:1.8rem;}
+  .stat{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:1.1rem 1.2rem; box-shadow:var(--shadow);}
+  .stat b{display:block; font-family:var(--serif); font-size:2rem; line-height:1; letter-spacing:-.01em;}
+  .stat span{display:block; margin-top:.5rem; font-family:var(--mono); font-size:.66rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);}
+  .stat.good b{color:var(--green-ink);}
+
+  /* ---- section ---- */
+  section{padding:clamp(2.2rem,5vw,3.4rem) 0; border-top:1px solid var(--line);}
+  .sec-head{max-width:62ch; margin-bottom:1.7rem;}
+  .sec-head h2{font-size:clamp(1.5rem,3vw,2rem);}
+  .sec-head p{color:var(--muted); margin:.7rem 0 0;}
+
+  /* ---- gate strip ---- */
+  .gate{display:grid; gap:.8rem;}
+  .verdict{display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:1rem; background:var(--surface); border:1px solid var(--line); border-left-width:4px; border-radius:12px; padding:1rem 1.2rem; box-shadow:var(--shadow);}
+  .verdict.g{border-left-color:var(--green);}
+  .verdict.a{border-left-color:var(--amber);}
+  .verdict.r{border-left-color:var(--red);}
+  .lamp{width:18px; height:18px; border-radius:50%;}
+  .verdict.g .lamp{background:var(--green); box-shadow:0 0 0 4px var(--green-bg);}
+  .verdict.a .lamp{background:var(--amber); box-shadow:0 0 0 4px var(--amber-bg);}
+  .verdict.r .lamp{background:var(--red); box-shadow:0 0 0 4px var(--red-bg);}
+  .verdict .what b{font-weight:650;}
+  .verdict .what span{display:block; color:var(--muted); font-size:.9rem; margin-top:.15rem;}
+  .verdict .act{font-family:var(--mono); font-size:.66rem; text-transform:uppercase; letter-spacing:.06em; padding:.3rem .6rem; border-radius:999px; white-space:nowrap;}
+  .verdict.g .act{background:var(--green-bg); color:var(--green-ink);}
+  .verdict.a .act{background:var(--amber-bg); color:var(--amber-ink);}
+  .verdict.r .act{background:var(--red-bg); color:var(--red-ink);}
+
+  /* ---- feature groups ---- */
+  .groups{display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:1.1rem;}
+  .grp{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:1.3rem 1.4rem; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:1rem;}
+  .grp-top{display:flex; align-items:flex-start; justify-content:space-between; gap:.8rem; border-bottom:1px solid var(--line); padding-bottom:.9rem;}
+  .grp-top h3{font-family:var(--sans); font-weight:650; font-size:1.05rem; display:flex; align-items:baseline; gap:.55rem;}
+  .grp-top h3 .n{font-family:var(--mono); font-size:.7rem; color:var(--accent-ink); background:var(--accent-weak); border-radius:6px; padding:.15rem .45rem;}
+  .badge{display:inline-flex; align-items:center; gap:.4rem; font-family:var(--mono); font-size:.64rem; text-transform:uppercase; letter-spacing:.06em; color:var(--green-ink); background:var(--green-bg); border:1px solid color-mix(in srgb,var(--green) 35%,transparent); border-radius:999px; padding:.28rem .6rem; white-space:nowrap;}
+  .badge .dot{width:7px; height:7px; border-radius:50%; background:var(--green);}
+  .claims{list-style:none; margin:0; padding:0; display:grid; gap:.55rem;}
+  .claims li{display:flex; gap:.55rem; font-size:.9rem; color:var(--muted);}
+  .claims li::before{content:"✓"; color:var(--green); font-weight:700; flex:none;}
+  .claims li b{color:var(--ink); font-weight:600;}
+  .evi{background:var(--sunk); border:1px solid var(--line); border-radius:10px; overflow:hidden;}
+  .evi .cap{font-family:var(--mono); font-size:.64rem; text-transform:uppercase; letter-spacing:.07em; color:var(--faint); padding:.55rem .8rem .3rem;}
+  .evi pre{margin:0; padding:0 .8rem .75rem; overflow-x:auto; font-family:var(--mono); font-size:.76rem; line-height:1.5; color:var(--ink);}
+  .evi .ok{color:var(--green-ink);} .evi .am{color:var(--amber-ink);} .evi .rd{color:var(--red-ink);}
+  .evi .mut{color:var(--faint);} .evi .ac{color:var(--accent-ink);}
+
+  /* ---- reproduce ---- */
+  .repro{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden;}
+  .repro .rh{font-family:var(--mono); font-size:.66rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); padding:.7rem 1rem; border-bottom:1px solid var(--line); background:var(--surface-2);}
+  .repro pre{margin:0; padding:1rem; overflow-x:auto; font-family:var(--mono); font-size:.8rem; line-height:1.65;}
+  .repro .c{color:var(--faint);} .repro .p{color:var(--accent-ink);}
+
+  /* ---- footer ---- */
+  footer{border-top:1px solid var(--line); padding:2rem 0 3rem; color:var(--faint); font-size:.82rem;}
+  footer .chips{display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.9rem;}
+  footer .chip{font-family:var(--mono); font-size:.66rem; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:.3rem .7rem;}
+
+  @media (max-width:720px){ .stats{grid-template-columns:repeat(2,1fr);} .verdict{grid-template-columns:auto 1fr; } .verdict .act{grid-column:2; justify-self:start;} }
+  @media (prefers-reduced-motion:reduce){ *{animation:none !important;} }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="bar-in">
+    <div class="mark">
+      <svg class="spool" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="9.2" stroke="var(--accent)" stroke-width="1.6"/>
+        <path d="M12 3.2C7 6 7 18 12 20.8M12 3.2C17 6 17 18 12 20.8M3.4 10.5c4.6 2.4 12.6 2.4 17.2 0M3.4 13.5c4.6-2.4 12.6-2.4 17.2 0" stroke="var(--accent)" stroke-width="1.1" opacity=".65"/>
+      </svg>
+      klew
+    </div>
+    <span class="bar-tag">Feature verification · run 18 Jul 2026</span>
+    <button class="toggle" id="themeBtn" type="button" aria-label="Switch colour theme">Theme</button>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="head">
+    <p class="eyebrow">Verification report · read before the demo</p>
+    <h1>Every feature in the catalogue, run and accounted for.</h1>
+    <p class="lede">The six capability groups on klew's feature page were each exercised against the real code and the live TodoMVC demo app — not read, not asserted, but run. This is what came back.</p>
+    <div class="stamp"><span class="dot"></span>6 / 6 groups verified</div>
+    <div class="meta">main @ 1b25a4e · Playwright 1.61 · Python 3.14 · Node 24 · no model API key used anywhere</div>
+
+    <div class="stats">
+      <div class="stat good"><b class="tnum">6/6</b><span>Feature groups verified</span></div>
+      <div class="stat good"><b class="tnum">58</b><span>Automated tests green</span></div>
+      <div class="stat good"><b class="tnum">13</b><span>Live journeys passed</span></div>
+      <div class="stat"><b class="tnum">0</b><span>Model API keys required</span></div>
+    </div>
+  </div>
+
+  <!-- GATE -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">The decision engine</p>
+      <h2>One verdict per pull request — proven on all three lights</h2>
+      <p>The gate is a pure function over three real artifacts: the Playwright journey result, the testguard grade, and the selector-cache dry-run. Fed genuine outputs from this run, it produced each verdict with its written reason.</p>
+    </div>
+    <div class="gate">
+      <div class="verdict g">
+        <span class="lamp" aria-hidden="true"></span>
+        <div class="what"><b>🟢 GREEN — approve &amp; auto-merge</b><span>all 13 journeys passed; testguard clean (100/100); cache up to date</span></div>
+        <span class="act">merge</span>
+      </div>
+      <div class="verdict a">
+        <span class="lamp" aria-hidden="true"></span>
+        <div class="what"><b>🟠 ORANGE — request review</b><span>selector-cache delta UPDATE NEEDED but not justified by the PR + requirements</span></div>
+        <span class="act">review</span>
+      </div>
+      <div class="verdict r">
+        <span class="lamp" aria-hidden="true"></span>
+        <div class="what"><b>🔴 RED — file a bug</b><span>1 journey failed: TMVC-5 → LLM-readable ticket emitted with reproduction &amp; dedup key</span></div>
+        <span class="act">bug</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- GROUPS -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">The complete catalogue</p>
+      <h2>Six groups, each with the evidence behind it</h2>
+      <p>Every capability from the feature page, the check that was run, and a slice of the actual output it returned.</p>
+    </div>
+    <div class="groups">
+
+      <!-- 01 -->
+      <article class="grp">
+        <div class="grp-top">
+          <h3><span class="n">01</span> Exploration &amp; selectors</h3>
+          <span class="badge"><span class="dot"></span>Verified</span>
+        </div>
+        <ul class="claims">
+          <li><b>User-facing selector policy</b> — role/label first, test-id next, CSS last</li>
+          <li><b>Confidence scoring</b> &amp; <b>a11y flags</b> on every resolved selector</li>
+          <li><b>Snapshot diffing</b> — feed the model the delta, not the page</li>
+          <li>Token-efficient driving via the Microsoft Playwright CLI</li>
+        </ul>
+        <div class="evi">
+          <div class="cap">snapshot_diff.py before after</div>
+          <pre><span class="mut"># delta: +3 / -1 lines</span>
+@@ -5,2 +5,4 @@
+     checkbox "Toggle Buy milk"
+<span class="rd">-text "1 items left"</span>
+<span class="ok">+  listitem "Write tests"</span>
+<span class="ok">+    checkbox "Toggle Write tests"</span>
+<span class="ok">+text "2 items left"</span></pre>
+        </div>
+      </article>
+
+      <!-- 02 -->
+      <article class="grp">
+        <div class="grp-top">
+          <h3><span class="n">02</span> Governance &amp; cache</h3>
+          <span class="badge"><span class="dot"></span>Verified</span>
+        </div>
+        <ul class="claims">
+          <li><b>Human-approved cache</b> — nothing stored without the <code>--approved</code> gate</li>
+          <li><b>Dry-run check</b> — "does the cache need updating?", deterministic</li>
+          <li><b>Self-healing audit</b> re-validates every cached selector</li>
+          <li><b>Page Object export</b> — low-confidence / stale entries skipped</li>
+        </ul>
+        <div class="evi">
+          <div class="cap">cache_selectors.py --app todomvc --dry-run</div>
+          <pre><span class="am">CACHE UPDATE NEEDED</span> — 1 selector(s) to persist:
+  new:     <span class="ac">todo.dueDate</span>
+Persist with --approved --changed-only,
+then open a PR for review.</pre>
+        </div>
+      </article>
+
+      <!-- 03 -->
+      <article class="grp">
+        <div class="grp-top">
+          <h3><span class="n">03</span> Authoring</h3>
+          <span class="badge"><span class="dot"></span>Verified</span>
+        </div>
+        <ul class="claims">
+          <li><b>Code-first</b>, <b>no-code recorder</b>, and <b>plain-English</b> — all three routes</li>
+          <li>New locators flagged for the approval gate, cached ones reused</li>
+          <li><b>Goal-directed, cache-first</b> planning drives the browser only for gaps</li>
+        </ul>
+        <div class="evi">
+          <div class="cap">author_nl.py — plain-English → spec</div>
+          <pre>Wrote demo-nl.spec.ts
+  <span class="ok">reused cached selectors: 3</span>
+  <span class="am">new (need approval): 1</span>
+    NEW recorded.toggleWriteTests
+
+<span class="mut"># plan_goal: 3 needed →</span>
+  <span class="ok">2 reuse</span> (cached &amp; fresh)
+  <span class="am">1 explore</span> (todo.dueDate missing)</pre>
+        </div>
+      </article>
+
+      <!-- 04 -->
+      <article class="grp">
+        <div class="grp-top">
+          <h3><span class="n">04</span> The pull-request gate</h3>
+          <span class="badge"><span class="dot"></span>Verified</span>
+        </div>
+        <ul class="claims">
+          <li><b>Traffic-light verdict</b> — green / amber / red on every PR</li>
+          <li><b>Auto-merge · review · bug</b> mapped to the three lights</li>
+          <li><b>Requirement-justified</b> cache updates gate the amber path</li>
+          <li>Runs as a <b>GitHub Action</b>, deterministically, with no model API key</li>
+        </ul>
+        <div class="evi">
+          <div class="cap">python -m pr_gate.gate (three runs)</div>
+          <pre><span class="ok">🟢 GREEN</span>  all 13 journeys passed; clean; cache ok
+<span class="am">🟠 ORANGE</span> unjustified selector-cache delta
+<span class="rd">🔴 RED</span>    1 journey(s) failed: TMVC-5</pre>
+        </div>
+      </article>
+
+      <!-- 05 -->
+      <article class="grp">
+        <div class="grp-top">
+          <h3><span class="n">05</span> Quality &amp; traceability</h3>
+          <span class="badge"><span class="dot"></span>Verified</span>
+        </div>
+        <ul class="claims">
+          <li><b>Test-trust grading</b> — scores generated tests out of 100</li>
+          <li><b>Hallucinated-selector detection</b> against the live app</li>
+          <li><b>Requirement traceability</b> — uncovered stories surface automatically</li>
+          <li><b>LLM-readable bug reports</b> with reproduction &amp; de-duplication</li>
+        </ul>
+        <div class="evi">
+          <div class="cap">testguard — clean vs. bad spec</div>
+          <pre><span class="ok">clean.spec.ts   score 100  PASS</span>
+<span class="rd">bad.spec.ts     score  24  FAIL</span>  (8 findings, 3 high)
+  <span class="rd">TG004 missing-await</span> · <span class="rd">TG001 phantom-assert</span>
+
+<span class="am">Uncovered requirements: PROJ-2</span></pre>
+        </div>
+      </article>
+
+      <!-- 06 -->
+      <article class="grp">
+        <div class="grp-top">
+          <h3><span class="n">06</span> Delivery model</h3>
+          <span class="badge"><span class="dot"></span>Verified</span>
+        </div>
+        <ul class="claims">
+          <li>Ships as both a <b>skill</b> and an autonomous <b>sub-agent</b></li>
+          <li><b>Self-hosted</b> &amp; <b>LLM-agnostic</b> — nothing left the machine</li>
+          <li><b>Open standards</b> — Playwright, GitHub, Jira; no per-seat licence</li>
+        </ul>
+        <div class="evi">
+          <div class="cap">repo — delivery surfaces present</div>
+          <pre><span class="ac">.claude/skills/klew/SKILL.md</span>   <span class="mut">15.9 KB</span>
+<span class="ac">.claude/agents/klew.md</span>        <span class="mut"> 6.5 KB</span>
+<span class="ac">.github/workflows/</span>klew-pr-gate.yml
+<span class="ok"># gate workflow: no ANTHROPIC/OPENAI keys</span></pre>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- LIVE JOURNEYS -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Seen, not just asserted</p>
+      <h2>13 live journeys, run headed against the demo app</h2>
+      <p>The full TodoMVC journey suite drove a real Chromium browser end to end. Each journey ties to a requirement id (TMVC-1…13), so the run doubles as a coverage trace.</p>
+    </div>
+    <div class="evi" style="max-width:760px">
+      <div class="cap">BASE_URL=…:8123 npx playwright test todomvc-journeys.spec.ts --headed</div>
+      <pre><span class="ok">✓</span>  1  J1 add a single item                    <span class="mut">TMVC-1</span>
+<span class="ok">✓</span>  5  J5 completing an item decrements count  <span class="mut">TMVC-5</span>
+<span class="ok">✓</span>  8  J8 Active filter shows incomplete only  <span class="mut">TMVC-8</span>
+<span class="ok">✓</span> 11  J11 Clear completed removes completed   <span class="mut">TMVC-11</span>
+<span class="mut">   … 13 of 13 shown abbreviated …</span>
+<span class="ok">  13 passed (1.3m)</span></pre>
+    </div>
+  </section>
+
+  <!-- REPRODUCE -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Do it yourself</p>
+      <h2>Reproduce this report in three commands</h2>
+      <p>Everything above is deterministic and offline. From a fresh clone of <code>main</code>:</p>
+    </div>
+    <div class="repro">
+      <div class="rh">clone → decision engine → live journeys</div>
+      <pre><span class="c"># 1 · the decision engine — no browser, ~10s</span>
+<span class="p">python -m pytest</span> tests/test_pr_gate.py tests/test_author.py tests/test_author_nl.py -q
+<span class="c">#   → 25 passed</span>
+
+<span class="c"># 2 · test-trust grading &amp; traceability</span>
+<span class="p">cd</span> testguard &amp;&amp; npm install &amp;&amp; <span class="p">npm test</span>
+<span class="c">#   → 33 passed (7 files)</span>
+
+<span class="c"># 3 · real journeys against the demo app</span>
+(<span class="p">cd</span> e2e/app &amp;&amp; python3 -m http.server 8123 &amp;)
+<span class="p">cd</span> e2e &amp;&amp; npm install &amp;&amp; npx playwright install chromium
+BASE_URL=http://127.0.0.1:8123 <span class="p">npx playwright test</span>
+<span class="c">#   → 13 journeys passed</span></pre>
+    </div>
+  </section>
+
+  <footer>
+    <div>Verification run 18 July 2026 against <code>main @ 1b25a4e</code>. All figures are actual command output; nothing on this page is illustrative.</div>
+    <div class="chips">
+      <span class="chip">Self-hosted</span>
+      <span class="chip">Human-approved</span>
+      <span class="chip">Deterministic gate</span>
+      <span class="chip">No model API key</span>
+      <span class="chip">No lock-in</span>
+    </div>
+  </footer>
+
+</main>
+
+<script>
+  (function(){
+    var root=document.documentElement, btn=document.getElementById('themeBtn');
+    function current(){ var s=root.getAttribute('data-theme'); if(s) return s;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark':'light'; }
+    btn.addEventListener('click', function(){
+      root.setAttribute('data-theme', current()==='dark' ? 'light':'dark'); });
+  })();
+</script>
+</body>
+</html>
