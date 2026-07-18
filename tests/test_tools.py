@@ -77,3 +77,55 @@ def test_web_search_handles_no_results(monkeypatch) -> None:
 def test_web_search_live_returns_text() -> None:
     out = web_search.invoke({"query": "what is retrieval augmented generation"})
     assert isinstance(out, str) and out.strip()
+
+
+# --- weather_forecast (graduated from the Module 2 experiments) --------------- #
+
+
+def test_weather_forecast_is_registered() -> None:
+    assert "weather_forecast" in {t.name for t in get_tools()}
+
+
+def test_fetch_forecast_formats_daily_rows(monkeypatch) -> None:
+    # Stub the HTTP layer so parsing/formatting is tested with no network.
+    import documind.tools as tools
+
+    def fake_get(url, params):
+        if "geocoding" in url:
+            return {
+                "results": [
+                    {"name": "London", "country": "United Kingdom",
+                     "latitude": 51.5, "longitude": -0.1}
+                ]
+            }
+        return {
+            "daily": {
+                "time": ["2026-06-24", "2026-06-25"],
+                "temperature_2m_max": [38.2, 31.3],
+                "temperature_2m_min": [26.0, 20.5],
+                "precipitation_probability_max": [8, 10],
+            }
+        }
+
+    monkeypatch.setattr(tools, "_http_get_json", fake_get)
+    out = tools.fetch_forecast("London", days=2)
+    assert "London, United Kingdom" in out
+    assert "2026-06-24: high 38.2, low 26.0, rain chance 8%" in out
+
+
+def test_fetch_forecast_unknown_city(monkeypatch) -> None:
+    import documind.tools as tools
+
+    monkeypatch.setattr(tools, "_http_get_json", lambda url, params: {"results": []})
+    assert tools.fetch_forecast("Nowhereville").startswith("Error: could not find")
+
+
+def test_weather_forecast_tool_degrades_on_error(monkeypatch) -> None:
+    # The @tool wrapper must never raise — it returns an error string instead.
+    import documind.tools as tools
+
+    def boom(url, params):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(tools, "_http_get_json", boom)
+    assert tools.weather_forecast.invoke({"city": "London"}).startswith("Error fetching weather")

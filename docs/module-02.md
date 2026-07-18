@@ -10,9 +10,10 @@ Three new modules alongside the untouched Module 1 `documind.llm`:
 
 - `documind.chain` — the **LCEL chain**: `ChatPromptTemplate | model | StrOutputParser`.
   The bare Module 1 call, rebuilt the LangChain way. `python -m documind.chain "..."`.
-- `documind.tools` — two `@tool`-decorated tools: a **calculator** (exact arithmetic
-  via a safe AST evaluator — never `eval`) and a keyless **web_search** (DuckDuckGo
-  via `ddgs`).
+- `documind.tools` — three `@tool`-decorated tools: a **calculator** (exact
+  arithmetic via a safe AST evaluator — never `eval`), a keyless **web_search**
+  (DuckDuckGo via `ddgs`), and a **weather_forecast** (real daily data from the
+  keyless Open-Meteo API, graduated from the experiments — see below).
 - `documind.agent` — the **tool-calling agent**: `create_tool_calling_agent` +
   `AgentExecutor` bind the tools to the model and run the reason → act → observe
   loop. The model decides whether and which tool to call.
@@ -66,6 +67,84 @@ code — it asks, you execute, it reads the result.
   the chain/agent distinction cleanly, and they keep v1's new LangGraph-based
   agent for Module 3, where state graphs are the point. (Heads-up: importing the
   classic path emits a `langchain-community` sunset `DeprecationWarning`.)
+
+## Under the hood: how tool-calling actually works
+
+`AgentExecutor` looks like magic until you see the four concrete jobs behind it.
+The *intelligence* (which tool, what arguments) is the **model's**, and it's
+native to the API — LangChain only supplies the plumbing around that decision.
+
+| Job | Who does it | The actual code |
+|-----|-------------|-----------------|
+| 1. Turn your function into a JSON schema | `@tool` | `create_schema_from_function(...)` + `args_schema.__doc__` |
+| 2. Match the model's `name` to a function | `AgentExecutor` | `name_to_tool_map = {t.name: t for t in tools}` |
+| 3. Run your Python | `AgentExecutor` → tool | `tool.run(...)` → `_run` → `return self.func(*args, **kwargs)` |
+| 4. Loop until done | `AgentExecutor` | `while self._should_continue(...)` ... `if AgentFinish: return` |
+
+**The schema is generated from your function — it can't drift.** `@tool` reads
+the name, the type hints, and the *docstring* and emits exactly what Claude
+receives in the request's `tools` array:
+
+```json
+{ "name": "calculator",
+  "description": "Evaluate an arithmetic expression like '4891 * 73' ...",   // your docstring
+  "input_schema": { "type": "object",
+                    "properties": { "expression": { "type": "string" } },     // your type hint
+                    "required": ["expression"] } }
+```
+
+**Declared vs provided.** The *schema* (`expression` is a required string) is
+**declared** once by `@tool`. The *value* (`"5 * 8"`) is **provided** — generated
+by the model, per request. Proof: the input `"five multiplied by eight"` contains
+no digits and no `*`, yet the model still produces `{"expression": "5 * 8"}`. It
+isn't copying from the input; it's translating intent into an argument that fits
+the schema.
+
+**The model only knows a tool if its schema is in the request.** The API is
+stateless, so every call (and every loop iteration) re-sends the full tool list.
+Send no tools → `tool_calls` is empty and the model just answers in text. This is
+literally what "giving the agent a tool" means: putting its schema in the request.
+
+**How the model picks (routing).** There's no rule engine in LangChain. The model
+reads each tool's **name + description** and matches them against the user's
+intent (steered further by the system prompt). It can choose **none** (answer
+directly), **one**, or **several** tools. So the *docstring is a routing
+instruction*, not a human comment — a vague description means wrong-tool or
+wrong-format calls. (`tool_choice` can override the model's discretion: force a
+specific tool, require any tool, or forbid tools.)
+
+**Scaling the tool set.** All N schemas ship on every request, costing input
+tokens each turn. For a handful of tools that's fine — and prompt caching makes
+the (stable, front-of-request) tool block ~10× cheaper to re-send. Past many
+dozens of tools, switch to *tool search* / dynamic discovery so only the relevant
+schemas load, and tighten descriptions so they don't overlap.
+
+**Where our step-budget fix sits.** `AgentExecutor._call` has two exits: a normal
+one (`AgentFinish` → real answer) and a give-up one (`_should_continue` goes false
+at `max_iterations` → `return_stopped_response` → *"Agent stopped due to max
+iterations."*). Our fix lives **outside** the library, in `documind.agent.run`,
+right after `executor.invoke()`: if the result came back via the give-up exit, we
+make one final, tool-free pass (`_synthesize`) over the gathered
+`intermediate_steps` so the user gets a best-effort answer instead of the
+sentinel. It fires *only* on the give-up path; normal answers pass straight
+through. (Module 3 turns that hidden `while`/`AgentFinish` branching into an
+explicit graph, so a fix like this becomes a node you own rather than a wrapper.)
+
+## Experiments
+
+See [`../experiments/`](../experiments/README.md) for three reproducible probes
+into this agent. Headline findings:
+
+- **Chain vs Agent vs Structured** — all three got `4891 × 73` right; for work
+  this easy the trade-off is *shape and latency*, not correctness. Structured
+  output guarantees the shape; the agent adds *capability* — its payoff only
+  shows on tasks the model can't do unaided.
+- **Prompt-nudge ablation** — the anti-over-search instruction cut tool calls
+  from "burns the whole step budget every time" to 1–2 searches, but it's not a
+  hard guarantee at high budgets.
+- **A real weather tool beats DuckDuckGo** — a keyless Open-Meteo tool converged
+  in one call with grounded data where web-search snippets only produced hedged
+  non-answers. The meta-lesson: **tool quality dominates prompt-engineering.**
 
 ## Exercises (deepen the learning)
 
