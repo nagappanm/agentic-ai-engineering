@@ -268,3 +268,19 @@ def test_bug_report_shape():
 def test_extract_jira_key():
     assert requirements_source.extract_jira_key("feature/PROJ-123-thing", "", "") == "PROJ-123"
     assert requirements_source.extract_jira_key("no-key-here", "", "") is None
+
+
+# ---- fail-closed input loading (a broken pipeline must not look green) ----
+
+
+def test_read_report_none_on_missing_empty_or_invalid(tmp_path):
+    assert gate.read_report(str(tmp_path / "nope.json")) is None          # missing
+    empty = tmp_path / "empty.json"
+    empty.write_text("   \n")
+    assert gate.read_report(str(empty)) is None                            # empty
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not valid")
+    assert gate.read_report(str(bad)) is None                              # invalid
+    good = tmp_path / "good.json"
+    good.write_text('{"stats": {"unexpected": 0}}')
+    assert gate.read_report(str(good)) == {"stats": {"unexpected": 0}}     # valid
