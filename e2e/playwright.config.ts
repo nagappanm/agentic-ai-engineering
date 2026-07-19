@@ -8,6 +8,13 @@ export default defineConfig({
   use: {
     baseURL: process.env.BASE_URL ?? "http://127.0.0.1:8123",
     headless: true,
+    // Visual replay of each (headless) run — CI has no screen, so capture a
+    // step-by-step trace + video into test-results/, which the gate workflow
+    // uploads. Open with `npx playwright show-trace <trace.zip>` or
+    // trace.playwright.dev. Heavy on every run; switch to "retain-on-failure"
+    // if artifact size matters more than watching every pass.
+    trace: "on",
+    video: "on",
     // App uses `data-test`; harmless for these role/text-based specs but kept
     // so getByTestId-based POM getters also resolve here.
     testIdAttribute: "data-test",
