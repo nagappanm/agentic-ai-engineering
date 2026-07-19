@@ -22,7 +22,7 @@ jobs:
           cache: pip
 
       - name: Install
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,langchain]"  # langchain: Module 2 tests import it (run offline)
 
       - name: Lint
         run: ruff check .
