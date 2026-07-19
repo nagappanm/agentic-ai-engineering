@@ -40,7 +40,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"  # testguard uses fs.globSync (Node 22+)
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -59,26 +59,41 @@ jobs:
             --fallback e2e/requirements.txt \
             --out /tmp/requirements.txt
 
-      - name: Resolve BASE_URL (build & serve, or preview URL)
+      - name: Resolve BASE_URL (preview URL, or flag a local serve)
         run: |
+          # A backgrounded server does NOT survive across steps, so we only set
+          # env here and (re)start the static app inside each step that needs it.
           if [ -n "$KLEW_BASE_URL" ]; then
             echo "BASE_URL=$KLEW_BASE_URL" >> "$GITHUB_ENV"
+            echo "SERVE_LOCAL=0" >> "$GITHUB_ENV"
           else
-            # Default demo app: serve the static e2e TodoMVC on localhost.
-            (cd e2e/app 2>/dev/null || cd e2e) && nohup python3 -m http.server 8123 --bind 127.0.0.1 >/tmp/app.log 2>&1 &
-            for i in $(seq 1 20); do curl -sf http://127.0.0.1:8123/ >/dev/null && break; sleep 0.5; done
             echo "BASE_URL=http://127.0.0.1:8123" >> "$GITHUB_ENV"
+            echo "SERVE_LOCAL=1" >> "$GITHUB_ENV"
           fi
 
       - name: Run journey suite
         continue-on-error: true
         run: |
+          if [ "$SERVE_LOCAL" = "1" ]; then
+            if ! curl -sf "$BASE_URL/" >/dev/null 2>&1; then
+              nohup python3 -m http.server 8123 --bind 127.0.0.1 \
+                --directory "$GITHUB_WORKSPACE/e2e/app" >/tmp/app.log 2>&1 &
+            fi
+            for i in $(seq 1 40); do curl -sf "$BASE_URL/" >/dev/null 2>&1 && break; sleep 0.5; done
+          fi
           cd e2e
           BASE_URL="$BASE_URL" npx playwright test --reporter=json > "$GITHUB_WORKSPACE/results.json" || true
 
       - name: Grade with testguard
         continue-on-error: true
         run: |
+          if [ "$SERVE_LOCAL" = "1" ]; then
+            if ! curl -sf "$BASE_URL/" >/dev/null 2>&1; then
+              nohup python3 -m http.server 8123 --bind 127.0.0.1 \
+                --directory "$GITHUB_WORKSPACE/e2e/app" >/tmp/app.log 2>&1 &
+            fi
+            for i in $(seq 1 40); do curl -sf "$BASE_URL/" >/dev/null 2>&1 && break; sleep 0.5; done
+          fi
           cd testguard
           npx tsx src/cli.ts "$GITHUB_WORKSPACE/e2e/*.spec.ts" --json \
             --require-traceability --requirements /tmp/requirements.txt \

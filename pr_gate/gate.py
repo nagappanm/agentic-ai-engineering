@@ -44,6 +44,24 @@ def load_config(path: str | None) -> dict:
     return cfg
 
 
+def read_report(path: str) -> dict | None:
+    """Parse a gate input JSON, or None if missing/empty/invalid.
+
+    A None means the pipeline itself broke (the suite never ran, testguard
+    crashed) — the gate must fail CLOSED (red), never silently pass.
+    """
+    try:
+        text = Path(path).read_text().strip()
+    except OSError:
+        return None
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
 def parse_playwright(report: dict) -> list[dict]:
     """Flatten a Playwright JSON report into {id, title, status, file, line, error}."""
     out: list[dict] = []
@@ -194,8 +212,31 @@ def main() -> None:
     args = ap.parse_args()
 
     config = load_config(args.config)
-    journeys = parse_playwright(json.loads(Path(args.journeys).read_text()))
-    tg = json.loads(Path(args.testguard).read_text())
+
+    # Fail CLOSED: if either input is missing/empty/invalid, the pipeline broke —
+    # emit a red verdict rather than crashing (which would leave an empty file
+    # and a misleading "success").
+    journeys_report = read_report(args.journeys)
+    tg = read_report(args.testguard)
+    if journeys_report is None or tg is None:
+        broken = [n for n, ok in (("journey results", journeys_report is not None),
+                                  ("testguard grade", tg is not None)) if not ok]
+        verdict = {
+            "light": "red",
+            "reasons": [f"pipeline error — missing/empty gate input(s): {', '.join(broken)} "
+                        "(did the journey suite run and testguard succeed?)"],
+            "failed_journeys": [], "testguard": {}, "notes": [],
+            "summary": {"pipeline_error": True},
+        }
+        if args.json:
+            print(json.dumps(verdict, indent=2))
+        else:
+            print("🔴 RED")
+            for r in verdict["reasons"]:
+                print(f"  - {r}")
+        sys.exit(20)
+
+    journeys = parse_playwright(journeys_report)
     cache_update_needed = (
         "UPDATE NEEDED" in args.cache_status.upper() or "NEEDED" in args.cache_status.upper()
     )
