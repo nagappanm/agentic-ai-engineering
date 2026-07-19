@@ -1,7 +1,7 @@
 {
   "app": "todomvc",
   "base_url": "http://127.0.0.1:8123/",
-  "updated": "2026-07-16",
+  "updated": "2026-07-19",
   "selectors": {
     "todo.newInput": {
       "selector": "getByRole('textbox', { name: 'New todo' })",
@@ -80,6 +80,16 @@
       "reason": "unique named checkbox above the todo list; toggling it flips all items complete (count drops to '0 items left'). Distinct from per-item 'Toggle <title>' checkboxes.",
       "status": "approved",
       "verified": "2026-07-16",
+      "confidence": 1.0,
+      "a11y_flag": false
+    },
+    "search.input": {
+      "selector": "getByRole('searchbox', { name: 'Search todos' })",
+      "tier": "role",
+      "page": "/",
+      "reason": "unique searchbox with accessible name 'Search todos'; user-facing role+name (tier 1)",
+      "status": "approved",
+      "verified": "2026-07-19",
       "confidence": 1.0,
       "a11y_flag": false
     }
