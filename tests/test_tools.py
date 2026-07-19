@@ -11,6 +11,8 @@ import os
 
 import pytest
 
+pytest.importorskip("langchain_core")  # documind.tools imports langchain
+
 from documind.tools import calculator, get_tools, safe_calculate, web_search
 
 

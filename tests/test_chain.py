@@ -6,6 +6,10 @@ that the system prompt is actually wired into the prompt — no network, no key.
 
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("langchain_core")  # skip if the langchain extra isn't installed
+
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
