@@ -1,0 +1,57 @@
+{
+  "app": "saucedemo",
+  "base_url": "https://www.saucedemo.com/",
+  "updated": "2026-07-19",
+  "selectors": {
+    "login.username": {
+      "selector": "getByRole('textbox', { name: 'Username' })",
+      "tier": "role",
+      "page": "/",
+      "reason": "unique labelled username textbox",
+      "status": "approved",
+      "verified": "2026-07-19",
+      "confidence": 1.0,
+      "a11y_flag": false
+    },
+    "login.password": {
+      "selector": "getByPlaceholder('Password')",
+      "tier": "label-text",
+      "page": "/",
+      "reason": "password input lacks a reliable textbox role; unique user-facing placeholder",
+      "status": "approved",
+      "verified": "2026-07-19",
+      "confidence": 0.9,
+      "a11y_flag": false
+    },
+    "login.submit": {
+      "selector": "getByRole('button', { name: 'Login' })",
+      "tier": "role",
+      "page": "/",
+      "reason": "unique named button",
+      "status": "approved",
+      "verified": "2026-07-19",
+      "confidence": 1.0,
+      "a11y_flag": false
+    },
+    "inventory.addBackpack": {
+      "selector": "getByTestId('add-to-cart-sauce-labs-backpack')",
+      "tier": "testid",
+      "page": "/inventory.html",
+      "reason": "role+name 'Add to cart' ambiguous (6 matches); per-item data-test disambiguates. NOT an a11y gap \u2014 button is labelled; test-id for uniqueness only",
+      "status": "approved",
+      "verified": "2026-07-19",
+      "confidence": 0.75,
+      "a11y_flag": true
+    },
+    "cart.badge": {
+      "selector": "getByTestId('shopping-cart-badge')",
+      "tier": "testid",
+      "page": "/inventory.html",
+      "reason": "cart count is a role-less generic node ('1') \u2014 genuine a11y gap (should be role=status)",
+      "status": "approved",
+      "verified": "2026-07-19",
+      "confidence": 0.75,
+      "a11y_flag": true
+    }
+  }
+}
