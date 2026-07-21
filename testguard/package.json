@@ -1,29 +1,67 @@
 {
   "name": "testguard",
-  "version": "0.0.1",
-  "private": true,
+  "version": "0.1.0",
   "description": "A CI guard that flags untrustworthy AI-generated Playwright + TypeScript tests before they land.",
   "type": "module",
+  "license": "MIT",
+  "author": "nagappanm",
+  "homepage": "https://github.com/nagappanm/testguard#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nagappanm/testguard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nagappanm/testguard/issues"
+  },
+  "keywords": [
+    "playwright",
+    "testing",
+    "ai",
+    "test-quality",
+    "flaky-tests",
+    "ci",
+    "linter",
+    "trust",
+    "test-automation"
+  ],
   "engines": {
     "node": ">=20"
   },
   "bin": {
-    "testguard": "src/cli.ts"
+    "testguard": "dist/cli.js"
   },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "cli": "tsx src/cli.ts",
-    "benchmark": "tsx benchmark/run.ts"
+    "benchmark": "tsx benchmark/run.ts",
+    "build": "tsup src/index.ts src/cli.ts --format esm --dts --clean --external @playwright/test",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "ts-morph": "^24.0.0",
     "zod": "^3.23.8"
   },
+  "optionalDependencies": {
+    "@playwright/test": "^1.48.0"
+  },
   "devDependencies": {
-    "@playwright/test": "^1.48.0",
     "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"
