@@ -107,6 +107,13 @@ but the locator you **cache** must be a stable one from tiers 1–3 whenever
 possible. See `references/selector-policy.md` for the full rubric and how to
 verify uniqueness.
 
+**Shadow DOM & iframes.** Open shadow roots are pierced automatically by
+role/label/text locators — cache as normal and add `"shadow": true` as a note.
+An element inside an iframe records the frame in a `"frame"` field (a selector,
+or a list for nested frames); `export_pom.py` wraps its getter in
+`frameLocator(...)`. Closed shadow roots can't be pierced — flag them as a gap.
+See the "Shadow DOM, iframes & drag-and-drop" recipes in the selector policy.
+
 ## Active-tab root scoping (multi-tab conflict resolution)
 
 Refs and snapshots always apply to **one** tab. When more than one tab is open,
