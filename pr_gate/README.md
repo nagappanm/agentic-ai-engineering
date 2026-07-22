@@ -37,10 +37,44 @@ never silent); omit the input entirely to opt out.
 | File | Role |
 |---|---|
 | `gate.py` | pure `decide()` + Playwright/testguard parsers + CLI |
+| `flakedoctor.py` | cross-run flakiness triage — regression (file bug) vs flaky (quarantine) |
 | `justify.py` | `judge(ui_touched, yilsf_result)` — is a cache delta warranted by the PR + requirement? |
 | `bug_report.py` | `format_bug()` — YAML-front-matter + markdown repro an LLM can parse |
 | `tracker.py` | file the bug: **Jira REST** / **GitHub `gh`** / `--dry-run`; dedup + link-to-story |
 | `requirements_source.py` | requirement text from the linked Jira key (REST), else `e2e/requirements.txt` |
+
+## Flakiness triage (`flakedoctor.py`)
+
+`gate.py` grades **one** run, so an intermittently-failing journey files a bug on
+every unlucky run and buries the real regressions in noise. `flakedoctor` adds the
+missing dimension — **history**. Feed it the last N Playwright reports (oldest →
+newest) and it classifies each journey from two signals: **within-run** (Playwright
+retried and it flip-flopped → `status: "flaky"`) and **cross-run** (passes in some
+runs, fails in others).
+
+```bash
+python pr_gate/flakedoctor.py --runs-dir .ci/history --glob 'run-*.json'
+# journey  history   score  verdict       action
+# TMVC-1   PPFF      0.333  regression    file a bug — consistent failure after passing
+# TMVC-2   P~PP      0.917  flaky         quarantine — intermittent; do NOT file a bug
+# TMVC-3   PPPP      0.0    stable-pass   stable — passing across all runs
+```
+
+| verdict | history shape | gate action |
+|---|---|---|
+| `stable-pass` | all pass | 🟢 nothing |
+| `regression` | passed, then consistently fails | 🔴 **file a bug** — real break |
+| `stable-fail` | fails in every run on record | 🔴 **file a bug** — real break |
+| `flaky` | intermittent / within-run retry flake | 🟠 **quarantine** — do *not* file |
+| `recovered` | failed, now consistently passes | 🟢 nothing (note the heal) |
+
+**Wiring into CI:** persist each run's `results.json` to a small rolling history
+(e.g. `.ci/history/run-<sha>.json`), then before `tracker.py` files bugs, run
+`flakedoctor --json --only-failing` and **skip filing** any journey in its
+`quarantine` list — a flaky red becomes a quarantine note, not a Jira bug. The
+`file_bug` list is the set of genuine regressions worth a ticket. Exit code is
+`20` iff any regression/stable-fail is present (mirrors the gate's red), else `0`.
+Deterministic, offline, no LLM. Tests: `tests/test_flakedoctor.py`.
 
 MCP tools don't run inside a headless Action, so CI uses `gh` + Jira REST; an
 interactive Claude session can drive the same bug dict via the GitHub/Atlassian
