@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>three.js — 3D scene target</title>
+  <!-- three is ESM-only; map the bare specifier to the vendored module (which
+       imports ./three.core.min.js relatively — also vendored). Offline, no CDN. -->
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three.module.min.js" } }
+  </script>
+  <style>
+    html,body{margin:0;font-family:system-ui,sans-serif}
+    #panel{padding:8px 12px;background:#f3f4f6;border-top:1px solid #d1d5db}
+    #selected b{color:#2563eb}
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="panel"><span id="selected" data-test="selected-node">Selected: <b>none</b></span></div>
+  <script type="module">
+    import * as THREE from "three";
+
+    const W = 640, H = 420;
+    const selEl = document.querySelector("#selected b");
+    const select = (name) => { selEl.textContent = name; window.__lastSelected = name; };
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+    const camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 100);
+    camera.position.set(0, 0, 8);
+    const renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setPixelRatio(1);
+    renderer.setSize(W, H);
+    document.getElementById("stage").appendChild(renderer.domElement);
+
+    const defs = [
+      { name: "Cube",    x: -3, color: 0xe11d48 },
+      { name: "Sphere",  x:  0, color: 0x2563eb },
+      { name: "Pyramid", x:  3, color: 0x16a34a },
+    ];
+    const meshes = [];
+    for (const d of defs) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6),
+        new THREE.MeshBasicMaterial({ color: d.color }));
+      m.position.set(d.x, 0, 0);
+      m.name = d.name;
+      scene.add(m);
+      meshes.push(m);
+    }
+    renderer.render(scene, camera);
+
+    // Real 3D hit-testing: raycast from the click point into the scene.
+    const ray = new THREE.Raycaster();
+    renderer.domElement.addEventListener("pointerdown", (ev) => {
+      const r = renderer.domElement.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((ev.clientX - r.left) / r.width) * 2 - 1,
+        -((ev.clientY - r.top) / r.height) * 2 + 1,
+      );
+      ray.setFromCamera(ndc, camera);
+      const hit = ray.intersectObjects(meshes)[0];
+      if (hit) select(hit.object.name);
+    });
+
+    window.__three = { scene, camera, renderer };
+    requestAnimationFrame(() => { window.__sceneReady = true; });
+  </script>
+</body>
+</html>

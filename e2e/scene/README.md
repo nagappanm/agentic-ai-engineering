@@ -12,8 +12,12 @@ instance so a scene entry can address a shape by its logical identity.
 | `konva.html` | Konva 10 (2D) | rects | shape `name` | `window.__konva` |
 | `echarts.html` | ECharts 6 (2D) | bars | category `name` | `window.__echart` |
 | `cytoscape.html` | Cytoscape 3 (2D) | graph nodes | node `label` | `window.__cy` |
+| `three.html` | three.js (3D WebGL) | meshes | object `name` | `window.__three` |
+| `phaser.html` | Phaser 4 (2D/WebGL game) | game objects | object `name` | `window.__phaser` |
 
 (Sigma.js — the WebGL graph case — lives in the sibling `e2e/sigma`.)
+three.js is the 3D case: the object's world position is projected through the
+camera to screen, and the click is confirmed by the app's own raycasting.
 
 Each reflects the clicked shape's identity into `#selected [data-test="selected-node"]`.
 Libraries are vendored under `vendor/` (offline, no CDN).

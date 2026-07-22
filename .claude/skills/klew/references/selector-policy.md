@@ -56,11 +56,14 @@ every scene entry for it works. Adapters shipped today:
 | `konva` | Konva (2D) | `name` / `id` / attr | `window.__konva` |
 | `echarts` | ECharts (2D) | `name` (category); `series` opt | `window.__echart` |
 | `cytoscape` | Cytoscape.js (2D graph) | `id` or data field (`label`) | `window.__cy` |
+| `three` | three.js (3D WebGL) | `name` / object property | `window.__three` = `{ scene, camera, renderer }` |
+| `phaser` | Phaser (2D/WebGL game) | `name` / object property | `window.__phaser` (active Scene) |
 
 Acting is `eval` (compute the point via the app's own transform — Sigma's
 `graphToViewport`, Chart.js/ECharts element pixels, Fabric's `viewportTransform`,
 Pixi's `getGlobalPosition`, Konva's `getClientRect`, Cytoscape's
-`renderedPosition` — never a hardcoded pixel) + a real
+`renderedPosition`, three.js's camera projection (`vector.project(camera)`),
+Phaser's camera scroll/zoom — never a hardcoded pixel) + a real
 `mousemove`/`mousedown`/`mouseup` click, so the engine's own hit-testing fires:
 
 ```bash

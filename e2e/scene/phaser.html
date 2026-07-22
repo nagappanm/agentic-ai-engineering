@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Phaser — game scene target</title>
+  <script src="./vendor/phaser.min.js"></script>
+  <style>
+    html,body{margin:0;font-family:system-ui,sans-serif}
+    #panel{padding:8px 12px;background:#f3f4f6;border-top:1px solid #d1d5db}
+    #selected b{color:#2563eb}
+  </style>
+</head>
+<body>
+  <div id="game"></div>
+  <div id="panel"><span id="selected" data-test="selected-node">Selected: <b>none</b></span></div>
+  <script>
+    const selEl = document.querySelector('#selected b');
+    function select(name){ selEl.textContent = name; window.__lastSelected = name; }
+
+    new Phaser.Game({
+      type: Phaser.AUTO, width: 640, height: 420, parent: 'game',
+      backgroundColor: '#ffffff',
+      scene: {
+        create() {
+          const defs = [
+            { name: 'Ship', x: 120, y: 210, color: 0xe11d48 },
+            { name: 'Star', x: 340, y: 210, color: 0x2563eb },
+            { name: 'Coin', x: 520, y: 210, color: 0x16a34a },
+          ];
+          for (const d of defs) {
+            const r = this.add.rectangle(d.x, d.y, 90, 90, d.color);
+            r.name = d.name;
+            r.setInteractive();                        // enable hit area
+            r.on('pointerdown', () => select(d.name)); // real Phaser hit-testing
+          }
+          window.__phaser = this;                      // the active Scene
+          requestAnimationFrame(() => { window.__sceneReady = true; });
+        },
+      },
+    });
+  </script>
+</body>
+</html>

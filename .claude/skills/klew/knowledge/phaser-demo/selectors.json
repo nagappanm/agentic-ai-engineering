@@ -1,0 +1,39 @@
+{
+  "app": "phaser-demo",
+  "base_url": "http://127.0.0.1:8123",
+  "updated": "2026-07-22",
+  "selectors": {
+    "sprites.star": {
+      "selector": "scene:phaser/name=Star",
+      "tier": "scene",
+      "page": "/phaser.html",
+      "reason": "Phaser game object by name",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "phaser",
+        "instance": "window.__phaser",
+        "by": "name",
+        "value": "Star"
+      }
+    },
+    "sprites.coin": {
+      "selector": "scene:phaser/name=Coin",
+      "tier": "scene",
+      "page": "/phaser.html",
+      "reason": "Phaser game object by name",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "phaser",
+        "instance": "window.__phaser",
+        "by": "name",
+        "value": "Coin"
+      }
+    }
+  }
+}

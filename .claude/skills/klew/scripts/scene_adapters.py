@@ -263,6 +263,68 @@ def _cytoscape_count(instance: str, scene: dict) -> str:
     ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
 
 
+# --- three.js (3D WebGL) ------------------------------------------------------
+# The 3D case: project the object's WORLD position through the camera to screen
+# (obj.getWorldPosition -> vector.project(camera) -> NDC -> pixels). `instance`
+# must expose { scene, camera, renderer }. A Vector3 is obtained from the object's
+# own position.constructor so no THREE import is needed inside eval.
+
+def _three_point(instance: str, scene: dict) -> str:
+    return (
+        "() => {\n"
+        "  const t = %(inst)s;\n"
+        "  if (!t) throw new Error('scene/three: instance not found');\n"
+        "  const by = %(by)s;\n"
+        "  const o = by === 'name' ? t.scene.getObjectByName(%(val)s)\n"
+        "                          : t.scene.getObjectByProperty(by, %(val)s);\n"
+        "  if (!o) throw new Error('scene/three: no ' + by + '=' + %(val)s);\n"
+        "  const v = o.getWorldPosition(new o.position.constructor());\n"
+        "  v.project(t.camera);\n"
+        "  const r = t.renderer.domElement.getBoundingClientRect();\n"
+        "  const pt = { x: Math.round(r.left + (v.x * 0.5 + 0.5) * r.width),\n"
+        "               y: Math.round(r.top + (-v.y * 0.5 + 0.5) * r.height) };\n"
+        "  window.__ksel = pt; return pt;\n"
+        "}"
+    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+
+
+def _three_count(instance: str, scene: dict) -> str:
+    return (
+        "() => { const t = %(inst)s; if (!t) return 0; let c = 0; "
+        "t.scene.traverse(o => { if (o[%(by)s] != null && "
+        "String(o[%(by)s]).toLowerCase() === %(val)s.toLowerCase()) c++; }); return c; }"
+    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+
+
+# --- Phaser (2D/WebGL game engine) --------------------------------------------
+# Game object on the scene display list; world -> screen via the main camera
+# (scroll + zoom). `instance` is the active Scene.
+
+def _phaser_point(instance: str, scene: dict) -> str:
+    return (
+        "() => {\n"
+        "  const s = %(inst)s;\n"
+        "  if (!s) throw new Error('scene/phaser: instance not found');\n"
+        "  const o = s.children.list.find(o => o[%(by)s] != null &&\n"
+        "    String(o[%(by)s]).toLowerCase() === %(val)s.toLowerCase());\n"
+        "  if (!o) throw new Error('scene/phaser: no ' + %(by)s + '=' + %(val)s);\n"
+        "  const cam = s.cameras.main;\n"
+        "  const r = s.game.canvas.getBoundingClientRect();\n"
+        "  const pt = { x: Math.round(r.left + (o.x - cam.scrollX) * cam.zoom),\n"
+        "               y: Math.round(r.top + (o.y - cam.scrollY) * cam.zoom) };\n"
+        "  window.__ksel = pt; return pt;\n"
+        "}"
+    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+
+
+def _phaser_count(instance: str, scene: dict) -> str:
+    return (
+        "() => { const s = %(inst)s; if (!s) return 0; "
+        "return s.children.list.filter(o => o[%(by)s] != null && "
+        "String(o[%(by)s]).toLowerCase() === %(val)s.toLowerCase()).length; }"
+    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+
+
 # engine name -> _Engine(default instance, point builder, count builder)
 _ENGINES: dict[str, _Engine] = {
     "sigma":     _Engine("window.__sigma",      _sigma_point,     _sigma_count),
@@ -272,6 +334,8 @@ _ENGINES: dict[str, _Engine] = {
     "konva":     _Engine("window.__konva",      _konva_point,     _konva_count),
     "echarts":   _Engine("window.__echart",     _echarts_point,   _echarts_count),
     "cytoscape": _Engine("window.__cy",         _cytoscape_point, _cytoscape_count),
+    "three":     _Engine("window.__three",      _three_point,     _three_count),
+    "phaser":    _Engine("window.__phaser",     _phaser_point,    _phaser_count),
 }
 
 
