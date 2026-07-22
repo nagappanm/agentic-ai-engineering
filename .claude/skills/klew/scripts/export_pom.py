@@ -17,6 +17,7 @@ Logical names group into classes by their first dotted segment:
 `this.page.locator('...')`. Stale/ambiguous or low-confidence entries are
 skipped (and reported) so the POM only exposes locators worth trusting.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -39,12 +40,30 @@ def _class_name(group: str) -> str:
     return "".join(w[:1].upper() + w[1:] for w in words if w) + "Page"
 
 
-def _locator_expr(selector: str) -> str:
-    s = selector.strip()
+def _js_str(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def _frame_prefix(frame) -> str:
+    """A frameLocator(...) chain for an element inside one or more iframes."""
+    if not frame:
+        return "this.page"
+    frames = [frame] if isinstance(frame, str) else list(frame)
+    return "this.page" + "".join(f".frameLocator('{_js_str(f)}')" for f in frames)
+
+
+def _locator_expr(entry: dict) -> str:
+    """Build the locator, scoped into any iframe chain the entry records.
+
+    Open shadow DOM needs nothing special — role/label/text locators pierce it.
+    iframes do: the element lives inside `frameLocator(...)`, recorded as `frame`
+    (a single selector, or a list for nested frames).
+    """
+    s = entry["selector"].strip()
+    base = _frame_prefix(entry.get("frame"))
     if s.startswith("getBy"):
-        return f"this.page.{s}"
-    css = s.replace("\\", "\\\\").replace("'", "\\'")
-    return f"this.page.locator('{css}')"
+        return f"{base}.{s}"
+    return f"{base}.locator('{_js_str(s)}')"
 
 
 def main() -> None:
@@ -100,8 +119,12 @@ def main() -> None:
             note = f"  // tier={entry.get('tier')} confidence={entry.get('confidence')}"
             if entry.get("a11y_flag"):
                 note += " [a11y: non-user-facing locator]"
+            if entry.get("frame"):
+                note += f" [iframe: {entry['frame']}]"
+            if entry.get("shadow"):
+                note += " [shadow DOM]"
             lines.append(note)
-            lines.append(f"  get {m}(): Locator {{ return {_locator_expr(entry['selector'])}; }}")
+            lines.append(f"  get {m}(): Locator {{ return {_locator_expr(entry)}; }}")
         lines.append("}")
         lines.append("")
 

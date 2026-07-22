@@ -51,6 +51,39 @@ root**:
 Re-run this loop per tab; do not carry a ref or an unverified locator across a
 `tab-select`.
 
+## Shadow DOM, iframes & drag-and-drop
+
+The selector *tiers* above still apply inside these; only the **scoping** changes.
+
+### Shadow DOM
+- **Open shadow roots are pierced automatically** — `getByRole`/`getByLabel`/
+  `getByText` and CSS reach elements inside open shadow DOM with no special
+  syntax. Resolve and cache them exactly as normal; add `"shadow": true` as a
+  note so reviewers know why the DOM looked nested.
+- **Closed shadow roots cannot be pierced.** If a control is unreachable, do not
+  invent a locator — flag it (the app must expose it, e.g. a `part`/`data-test`
+  on the host) and record it as a gap.
+
+### iframes
+- An element inside an iframe must be scoped through the frame: cache the frame
+  in the entry's **`frame`** field (a single selector, or a **list** for nested
+  iframes). `export_pom.py` renders it as
+  `page.frameLocator('<frame>').getBy...`. Prefer a stable frame selector
+  (`iframe[title='…']`, `iframe[name='…']`) over an index.
+  ```jsonc
+  "payment.card": {
+    "selector": "getByLabel('Card number')", "tier": "label-text",
+    "frame": "iframe[title='Payment']"        // nested: ["iframe#outer","iframe#inner"]
+  }
+  ```
+- Verify inside the frame with the CLI: snapshot shows frame contents; resolve
+  the locator scoped to that frame before caching.
+
+### Drag-and-drop
+- Use Playwright's `dragTo` (`source.dragTo(target)`) or the CLI `drag`
+  command — cache **both** endpoints as normal selectors; the interaction is the
+  test's, not the cache's.
+
 ## Anti-patterns to avoid caching
 
 - Auto-generated / hashed classes (`css-1a2b3c`, `MuiButton-root-42`).

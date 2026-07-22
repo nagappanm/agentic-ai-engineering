@@ -18,14 +18,21 @@ candidates.json shape (keyed by logical dotted name):
         "selector": "getByRole('textbox', { name: 'Email' })",
         "tier": "role",          # role | label-text | testid | css
         "page": "/login",
-        "reason": "unique labelled textbox"
+        "reason": "unique labelled textbox",
+        "frame": "iframe[title='Login']",  # optional — element is inside this iframe
+        "shadow": true            # optional note — element is inside a shadow root
       }
     }
+
+`frame` may be a single selector or a list (nested iframes); export_pom wraps the
+getter in `frameLocator(...)`. `shadow` is a note only — open shadow DOM is
+pierced automatically by role/label/text locators.
 
 Each stored entry is stamped with status=approved, today's verified date, a
 0..1 confidence score (tier x recency), and an a11y_flag when the element could
 only be reached by a non-user-facing tier (testid/css).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -105,14 +112,19 @@ def main() -> None:
     cache["app"] = args.app
     selectors = cache["selectors"]
 
-    # Classify every candidate against the current cache.
+    # Classify every candidate against the current cache. `frame`/`shadow` are
+    # optional (iframe / shadow-DOM scoping); normalise missing == "" so adding
+    # the fields never churns frame-free entries.
+    def _nv(v):
+        return "" if v in (None, "") else v
+
+    fields = ("selector", "tier", "page", "reason", "frame", "shadow")
     new_names, changed_names, same_names = [], [], []
     for name, entry in candidates.items():
         existing = selectors.get(name)
-        fields = ("selector", "tier", "page", "reason")
         if existing is None:
             new_names.append(name)
-        elif all(existing.get(k) == entry.get(k, "") for k in fields):
+        elif all(_nv(existing.get(k)) == _nv(entry.get(k)) for k in fields):
             same_names.append(name)
         else:
             changed_names.append(name)
@@ -151,7 +163,7 @@ def main() -> None:
         tier = entry["tier"]
         stamp = today()
         (added if name in new_names else updated).append(name)
-        selectors[name] = {
+        record = {
             "selector": entry["selector"],
             "tier": tier,
             "page": entry.get("page", ""),
@@ -161,6 +173,12 @@ def main() -> None:
             "confidence": confidence(tier, stamp),
             "a11y_flag": tier in A11Y_FLAG_TIERS,
         }
+        # Optional scoping — only stored when present, so frame-free entries stay lean.
+        if entry.get("frame"):
+            record["frame"] = entry["frame"]  # iframe selector, or list for nested frames
+        if entry.get("shadow"):
+            record["shadow"] = entry["shadow"]  # note: element is inside a shadow root
+        selectors[name] = record
 
     if args.changed_only and not added and not updated:
         print(f"No new/changed selectors — cache unchanged ({len(unchanged)} already current).")
