@@ -286,6 +286,26 @@ such entries `a11y_flag: true` and prints them under "a11y review". Surface
 these to the user instead of silently swallowing them — they are bugs, not just
 selector inconveniences.
 
+### From a flag to an audit report (`a11y_report.py`)
+
+Promote that byproduct into a **graded, WCAG-referenced audit** a team or a
+compliance reviewer (European Accessibility Act) can act on:
+
+```bash
+python .claude/skills/klew/scripts/a11y_report.py --app <app>                 # text
+python .claude/skills/klew/scripts/a11y_report.py --app <app> --snapshot page.txt --format md
+python .claude/skills/klew/scripts/a11y_report.py --app <app> --fail-on serious   # gate in CI
+```
+
+It draws from two offline sources: the **cache** (every `a11y_flag` entry) and an
+optional **fresh snapshot** (structural checks — nameless interactive elements,
+images with no text alternative, heading-level jumps, duplicate landmarks). Each
+finding carries a severity (`serious`/`moderate`/`minor`), the WCAG success
+criterion, and a concrete remedy. Crucially, it **reads the entry's `reason`** so
+a labelled element that only needed a test id for uniqueness is a `minor`
+`A11Y-UNIQUENESS` note, not a `moderate` false alarm — the report doesn't cry
+wolf. `--fail-on <severity>` gives a CI exit code so `pr_gate` can gate on it.
+
 ## Keeping the cache honest — audit & self-heal
 
 Selectors rot as the UI changes. Re-validate a cached app against the live app:

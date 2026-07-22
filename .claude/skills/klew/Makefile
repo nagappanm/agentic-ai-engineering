@@ -44,7 +44,7 @@ TESTID_ATTR   ?= data-testid
 PW_EXECUTABLE ?=
 PW_SANDBOX    ?= true
 
-.PHONY: help install config plan record author author-nl open snapshot cache cache-delta cache-check knowledge-check knowledge-scaffold audit-plan audit-apply pom handoff clean
+.PHONY: help install config plan record author author-nl open snapshot cache cache-delta cache-check knowledge-check knowledge-scaffold audit-plan audit-apply a11y pom handoff clean
 
 help:            ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -117,6 +117,9 @@ audit-plan:      ## Print the live re-validation checklist for a cached app
 audit-apply:     ## Apply audit results (RESULTS=results.json of {name: match_count})
 	@test -n "$(RESULTS)" || { echo "set RESULTS=<results.json>"; exit 2; }
 	$(PY) $(SCRIPTS)/audit_selectors.py --app "$(APP)" --apply-results "$(RESULTS)"
+
+a11y:            ## Accessibility audit from the cache (+ optional SNAPSHOT); FORMAT/FAIL_ON opt.
+	$(PY) $(SCRIPTS)/a11y_report.py --app "$(APP)" $(if $(SNAPSHOT),--snapshot "$(SNAPSHOT)") $(if $(FORMAT),--format "$(FORMAT)") $(if $(FAIL_ON),--fail-on "$(FAIL_ON)")
 
 pom:             ## Export the approved cache to a Playwright Page Object
 	$(PY) $(SCRIPTS)/export_pom.py --app "$(APP)" --min-confidence "$(MIN_CONF)"
