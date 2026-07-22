@@ -26,7 +26,7 @@ import shlex
 import sys
 
 from _common import load_cache
-from scene_adapters import point_expr
+from scene_adapters import default_instance, point_expr
 
 
 def main() -> None:
@@ -61,7 +61,7 @@ def main() -> None:
         cfg = f" --config {shlex.quote(args.config)}" if args.config else ""
         lines.append(f"playwright-cli -s={s} open {shlex.quote(args.open_url)}{cfg} >/dev/null")
         # wait for the scene instance to be live
-        inst = scene.get("instance") or "window.__sigma"
+        inst = scene.get("instance") or default_instance(scene["engine"])
         wait = (
             "() => new Promise(r => { const t = setInterval(() => { if (%s) "
             "{ clearInterval(t); r('ready'); } }, 50); })" % inst

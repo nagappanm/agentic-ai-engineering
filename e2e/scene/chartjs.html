@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Chart.js — scene target</title>
+  <script src="./vendor/chart.umd.min.js"></script>
+  <style>
+    html,body{margin:0;font-family:system-ui,sans-serif}
+    #wrap{width:640px;height:420px}
+    #panel{padding:8px 12px;background:#f3f4f6;border-top:1px solid #d1d5db}
+    #selected b{color:#2563eb}
+  </style>
+</head>
+<body>
+  <div id="wrap"><canvas id="c"></canvas></div>
+  <div id="panel"><span id="selected" data-test="selected-node">Selected: <b>none</b></span></div>
+  <script>
+    const selEl = document.querySelector('#selected b');
+    function select(label){ selEl.textContent = label; window.__lastSelected = label; }
+
+    const labels = ['Jan','Feb','Mar','Apr','May'];
+    const chart = new Chart(document.getElementById('c'), {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'Sales', data: [12, 19, 7, 15, 22],
+        backgroundColor: ['#e11d48','#2563eb','#16a34a','#d97706','#7c3aed'] }] },
+      options: {
+        responsive: false, animation: false,
+        // Real hit-testing: a click reports the data element under the cursor.
+        onClick(evt, elements) { if (elements.length) select(labels[elements[0].index]); },
+        plugins: { legend: { display: false } },
+      },
+    });
+
+    // Expose the instance (common "app exposes its chart" case).
+    window.__chart = chart;
+    requestAnimationFrame(() => { window.__sceneReady = true; });
+  </script>
+</body>
+</html>

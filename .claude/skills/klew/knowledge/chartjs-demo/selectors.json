@@ -1,0 +1,39 @@
+{
+  "app": "chartjs-demo",
+  "base_url": "http://127.0.0.1:8123",
+  "updated": "2026-07-22",
+  "selectors": {
+    "bars.feb": {
+      "selector": "scene:chartjs/label=Feb",
+      "tier": "scene",
+      "page": "/chartjs.html",
+      "reason": "Chart.js bar; addressed by category label",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "chartjs",
+        "instance": "window.__chart",
+        "by": "label",
+        "value": "Feb"
+      }
+    },
+    "bars.may": {
+      "selector": "scene:chartjs/label=May",
+      "tier": "scene",
+      "page": "/chartjs.html",
+      "reason": "Chart.js bar; addressed by category label",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "chartjs",
+        "instance": "window.__chart",
+        "by": "label",
+        "value": "May"
+      }
+    }
+  }
+}

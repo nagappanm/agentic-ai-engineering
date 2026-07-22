@@ -45,8 +45,18 @@ A scene entry caches the element's **durable logical identity**, not a pixel:
 `selector` is derived automatically (`scene:<engine>/<by>=<value>`). How that
 identity becomes an on-screen point lives in **one per-engine adapter**
 (`scripts/scene_adapters.py`), never in the cache entry — add an engine there and
-every scene entry for it works. Acting is `eval` (compute the point via the app's
-own transform, e.g. Sigma's `graphToViewport` — never a hardcoded pixel) + a real
+every scene entry for it works. Adapters shipped today:
+
+| `engine` | Library | `by` (identity) | Default instance |
+|---|---|---|---|
+| `sigma` | Sigma.js (WebGL graph) | `label` / `id` (node attr) | `window.__sigma` |
+| `chartjs` | Chart.js (2D) | `label` (category); `dataset` opt | `window.__chart` |
+| `fabric` | Fabric.js (2D) | object property, e.g. `name` | `window.__fabric` |
+| `pixi` | PixiJS (WebGL) | display `label` (v8) | `window.__PIXI_APP__` |
+
+Acting is `eval` (compute the point via the app's own transform — Sigma's
+`graphToViewport`, Chart.js element pixels, Fabric's `viewportTransform`, Pixi's
+`getGlobalPosition` — never a hardcoded pixel) + a real
 `mousemove`/`mousedown`/`mouseup` click, so the engine's own hit-testing fires:
 
 ```bash
