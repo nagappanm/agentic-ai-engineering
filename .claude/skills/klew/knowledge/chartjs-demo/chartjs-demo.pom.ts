@@ -13,7 +13,7 @@ export class BarsPage {
         if (!c) throw new Error('scene/chartjs: instance not found');
         const labels = c.data.labels.map(String);
         const i = labels.findIndex(l => l.toLowerCase() === "Feb".toLowerCase());
-        if (i < 0) throw new Error('scene/chartjs: no label=Feb');
+        if (i < 0) throw new Error('scene/chartjs: no label=' + "Feb");
         const el = c.getDatasetMeta(0).data[i];
         const r = c.canvas.getBoundingClientRect();
         const y = el.base !== undefined ? (el.y + el.base) / 2 : el.y;  // inside bars
@@ -29,7 +29,7 @@ export class BarsPage {
         if (!c) throw new Error('scene/chartjs: instance not found');
         const labels = c.data.labels.map(String);
         const i = labels.findIndex(l => l.toLowerCase() === "May".toLowerCase());
-        if (i < 0) throw new Error('scene/chartjs: no label=May');
+        if (i < 0) throw new Error('scene/chartjs: no label=' + "May");
         const el = c.getDatasetMeta(0).data[i];
         const r = c.canvas.getBoundingClientRect();
         const y = el.base !== undefined ? (el.y + el.base) / 2 : el.y;  // inside bars

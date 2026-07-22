@@ -12,7 +12,7 @@ export class NodesPage {
         const app = window.__PIXI_APP__;
         if (!app) throw new Error('scene/pixi: instance not found');
         const stack = [...app.stage.children]; let hit = null; while (stack.length) { const n = stack.pop(); if (n["label"] != null && String(n["label"]).toLowerCase() === "Three".toLowerCase()) { hit = n; break; } if (n.children) stack.push(...n.children); }
-        if (!hit) throw new Error('scene/pixi: no label=Three');
+        if (!hit) throw new Error('scene/pixi: no ' + "label" + '=' + "Three");
         const g = hit.getGlobalPosition();
         const r = app.canvas.getBoundingClientRect();
         const pt = { x: Math.round(r.left + g.x), y: Math.round(r.top + g.y) };
@@ -26,7 +26,7 @@ export class NodesPage {
         const app = window.__PIXI_APP__;
         if (!app) throw new Error('scene/pixi: instance not found');
         const stack = [...app.stage.children]; let hit = null; while (stack.length) { const n = stack.pop(); if (n["label"] != null && String(n["label"]).toLowerCase() === "Two".toLowerCase()) { hit = n; break; } if (n.children) stack.push(...n.children); }
-        if (!hit) throw new Error('scene/pixi: no label=Two');
+        if (!hit) throw new Error('scene/pixi: no ' + "label" + '=' + "Two");
         const g = hit.getGlobalPosition();
         const r = app.canvas.getBoundingClientRect();
         const pt = { x: Math.round(r.left + g.x), y: Math.round(r.top + g.y) };

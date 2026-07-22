@@ -11,10 +11,11 @@ export class ObjectsPage {
     const pt = await this.page.evaluate(() => {
         const t = window.__three;
         if (!t) throw new Error('scene/three: instance not found');
-        const by = "name";
-        const o = by === 'name' ? t.scene.getObjectByName("Pyramid")
-                                : t.scene.getObjectByProperty(by, "Pyramid");
-        if (!o) throw new Error('scene/three: no ' + by + '=' + "Pyramid");
+        const by = "name", val = "Pyramid";
+        let o = null;
+        t.scene.traverse(n => { if (o == null && n[by] != null &&
+          String(n[by]).toLowerCase() === val.toLowerCase()) o = n; });
+        if (!o) throw new Error('scene/three: no ' + by + '=' + val);
         const v = o.getWorldPosition(new o.position.constructor());
         v.project(t.camera);
         const r = t.renderer.domElement.getBoundingClientRect();
@@ -29,10 +30,11 @@ export class ObjectsPage {
     const pt = await this.page.evaluate(() => {
         const t = window.__three;
         if (!t) throw new Error('scene/three: instance not found');
-        const by = "name";
-        const o = by === 'name' ? t.scene.getObjectByName("Sphere")
-                                : t.scene.getObjectByProperty(by, "Sphere");
-        if (!o) throw new Error('scene/three: no ' + by + '=' + "Sphere");
+        const by = "name", val = "Sphere";
+        let o = null;
+        t.scene.traverse(n => { if (o == null && n[by] != null &&
+          String(n[by]).toLowerCase() === val.toLowerCase()) o = n; });
+        if (!o) throw new Error('scene/three: no ' + by + '=' + val);
         const v = o.getWorldPosition(new o.position.constructor());
         v.project(t.camera);
         const r = t.renderer.domElement.getBoundingClientRect();

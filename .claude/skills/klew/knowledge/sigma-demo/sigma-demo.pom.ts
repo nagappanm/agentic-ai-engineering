@@ -13,7 +13,7 @@ export class GraphPage {
         if (!s) throw new Error('scene/sigma: instance not found');
         const g = s.getGraph();
         const id = g.findNode((n, a) => String(a["label"]).toLowerCase() === "Alice".toLowerCase());
-        if (!id) throw new Error('scene/sigma: no label=Alice');
+        if (!id) throw new Error('scene/sigma: no ' + "label" + '=' + "Alice");
         const a = g.getNodeAttributes(id);
         const vp = s.graphToViewport({ x: a.x, y: a.y });
         const r = s.getContainer().getBoundingClientRect();
@@ -29,7 +29,7 @@ export class GraphPage {
         if (!s) throw new Error('scene/sigma: instance not found');
         const g = s.getGraph();
         const id = g.findNode((n, a) => String(a["label"]).toLowerCase() === "Bob".toLowerCase());
-        if (!id) throw new Error('scene/sigma: no label=Bob');
+        if (!id) throw new Error('scene/sigma: no ' + "label" + '=' + "Bob");
         const a = g.getNodeAttributes(id);
         const vp = s.graphToViewport({ x: a.x, y: a.y });
         const r = s.getContainer().getBoundingClientRect();

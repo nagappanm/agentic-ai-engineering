@@ -52,7 +52,7 @@ def _sigma_point(instance: str, scene: dict) -> str:
   if (!s) throw new Error('scene/sigma: instance not found');
   const g = s.getGraph();
   const id = g.findNode((n, a) => String(a[{by}]).toLowerCase() === {val}.toLowerCase());
-  if (!id) throw new Error('scene/sigma: no {scene["by"]}={scene["value"]}');
+  if (!id) throw new Error('scene/sigma: no ' + {by} + '=' + {val});
   const a = g.getNodeAttributes(id);
   const vp = s.graphToViewport({{ x: a.x, y: a.y }});
   const r = s.getContainer().getBoundingClientRect();
@@ -80,7 +80,7 @@ def _chartjs_point(instance: str, scene: dict) -> str:
   if (!c) throw new Error('scene/chartjs: instance not found');
   const labels = c.data.labels.map(String);
   const i = labels.findIndex(l => l.toLowerCase() === {val}.toLowerCase());
-  if (i < 0) throw new Error('scene/chartjs: no label={scene["value"]}');
+  if (i < 0) throw new Error('scene/chartjs: no label=' + {val});
   const el = c.getDatasetMeta({ds}).data[i];
   const r = c.canvas.getBoundingClientRect();
   const y = el.base !== undefined ? (el.y + el.base) / 2 : el.y;  // inside bars
@@ -99,6 +99,9 @@ def _chartjs_count(instance: str, scene: dict) -> str:
 
 
 # --- Fabric.js (2D object model) ----------------------------------------------
+# Note: assumes devicePixelRatio == 1 (true headless / on the CI runner). On a
+# retina display Fabric scales the backing store by dpr while getBoundingClientRect
+# stays in CSS px; if you run headed on such a display, divide sx/sy by dpr.
 
 def _fabric_point(instance: str, scene: dict) -> str:
     by, val = _js(scene["by"]), _js(scene["value"])
@@ -106,7 +109,7 @@ def _fabric_point(instance: str, scene: dict) -> str:
   const c = {instance};
   if (!c) throw new Error('scene/fabric: instance not found');
   const o = c.getObjects().find(o => String(o[{by}]).toLowerCase() === {val}.toLowerCase());
-  if (!o) throw new Error('scene/fabric: no {scene["by"]}={scene["value"]}');
+  if (!o) throw new Error('scene/fabric: no ' + {by} + '=' + {val});
   const cp = o.getCenterPoint();
   const v = c.viewportTransform;                       // scene -> screen (pan/zoom)
   const sx = cp.x * v[0] + cp.y * v[2] + v[4];
@@ -137,12 +140,13 @@ _PIXI_FIND = (
 
 
 def _pixi_point(instance: str, scene: dict) -> str:
-    find = _PIXI_FIND % {"by": _js(scene["by"]), "val": _js(scene["value"])}
+    by, val = _js(scene["by"]), _js(scene["value"])
+    find = _PIXI_FIND % {"by": by, "val": val}
     return f"""() => {{
   const app = {instance};
   if (!app) throw new Error('scene/pixi: instance not found');
   {find}
-  if (!hit) throw new Error('scene/pixi: no {scene["by"]}={scene["value"]}');
+  if (!hit) throw new Error('scene/pixi: no ' + {by} + '=' + {val});
   const g = hit.getGlobalPosition();
   const r = app.canvas.getBoundingClientRect();
   const pt = {{ x: Math.round(r.left + g.x), y: Math.round(r.top + g.y) }};
@@ -270,14 +274,17 @@ def _cytoscape_count(instance: str, scene: dict) -> str:
 # own position.constructor so no THREE import is needed inside eval.
 
 def _three_point(instance: str, scene: dict) -> str:
+    # Case-insensitive traversal — matches _three_count (and every other engine),
+    # so an audit count of 1 and the click always agree on the same object.
     return (
         "() => {\n"
         "  const t = %(inst)s;\n"
         "  if (!t) throw new Error('scene/three: instance not found');\n"
-        "  const by = %(by)s;\n"
-        "  const o = by === 'name' ? t.scene.getObjectByName(%(val)s)\n"
-        "                          : t.scene.getObjectByProperty(by, %(val)s);\n"
-        "  if (!o) throw new Error('scene/three: no ' + by + '=' + %(val)s);\n"
+        "  const by = %(by)s, val = %(val)s;\n"
+        "  let o = null;\n"
+        "  t.scene.traverse(n => { if (o == null && n[by] != null &&\n"
+        "    String(n[by]).toLowerCase() === val.toLowerCase()) o = n; });\n"
+        "  if (!o) throw new Error('scene/three: no ' + by + '=' + val);\n"
         "  const v = o.getWorldPosition(new o.position.constructor());\n"
         "  v.project(t.camera);\n"
         "  const r = t.renderer.domElement.getBoundingClientRect();\n"
@@ -361,6 +368,10 @@ def canonical_selector(engine: str, by: str, value: str) -> str:
 
 
 def _instance_of(scene: dict) -> str:
+    # `instance` is emitted into JS as an expression (not a quoted literal), so it
+    # is an arbitrary-code surface by design. Safe here because scene entries only
+    # enter the cache through cache_selectors.py's human-approval gate (--approved
+    # / PR review); never build a scene entry from untrusted candidates.
     return scene.get("instance") or default_instance(scene["engine"])
 
 

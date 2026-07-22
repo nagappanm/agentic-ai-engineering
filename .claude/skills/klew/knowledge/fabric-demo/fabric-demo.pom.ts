@@ -12,7 +12,7 @@ export class ShapesPage {
         const c = window.__fabric;
         if (!c) throw new Error('scene/fabric: instance not found');
         const o = c.getObjects().find(o => String(o["name"]).toLowerCase() === "Beta".toLowerCase());
-        if (!o) throw new Error('scene/fabric: no name=Beta');
+        if (!o) throw new Error('scene/fabric: no ' + "name" + '=' + "Beta");
         const cp = o.getCenterPoint();
         const v = c.viewportTransform;                       // scene -> screen (pan/zoom)
         const sx = cp.x * v[0] + cp.y * v[2] + v[4];
@@ -29,7 +29,7 @@ export class ShapesPage {
         const c = window.__fabric;
         if (!c) throw new Error('scene/fabric: instance not found');
         const o = c.getObjects().find(o => String(o["name"]).toLowerCase() === "Gamma".toLowerCase());
-        if (!o) throw new Error('scene/fabric: no name=Gamma');
+        if (!o) throw new Error('scene/fabric: no ' + "name" + '=' + "Gamma");
         const cp = o.getCenterPoint();
         const v = c.viewportTransform;                       // scene -> screen (pan/zoom)
         const sx = cp.x * v[0] + cp.y * v[2] + v[4];

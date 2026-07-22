@@ -53,9 +53,10 @@ def _plan(cache: dict) -> None:
         print(f"  # {name}  (tier={entry.get('tier')}, page={entry.get('page','')})")
         if entry.get("tier") == "scene":
             # No DOM element to hover — resolve the node's identity via the scene
-            # model instead; the eval returns the match count (0=gone, 1=ok).
+            # model instead; the eval returns the match count (the count builders
+            # detect duplicates, so 2+ is a real ambiguity signal here too).
             expr = _scene_count_expr(entry.get("scene", {}))
-            print(f"  #   playwright-cli --raw eval \"{expr}\"   # 0=gone 1=ok")
+            print(f"  #   playwright-cli --raw eval \"{expr}\"   # 0=gone 1=ok 2+=ambiguous")
         else:
             # getBy* locators pass through; raw CSS goes through a CSS locator.
             check = sel if sel.lstrip().startswith("getBy") else f'css={sel}'

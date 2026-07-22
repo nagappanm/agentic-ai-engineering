@@ -60,11 +60,14 @@ def main() -> None:
     if args.open_url:
         cfg = f" --config {shlex.quote(args.config)}" if args.config else ""
         lines.append(f"playwright-cli -s={s} open {shlex.quote(args.open_url)}{cfg} >/dev/null")
-        # wait for the scene instance to be live
+        # wait for the scene instance to be live — bounded so a never-loading page
+        # fails fast with a clear error instead of hanging forever.
         inst = scene.get("instance") or default_instance(scene["engine"])
         wait = (
-            "() => new Promise(r => { const t = setInterval(() => { if (%s) "
-            "{ clearInterval(t); r('ready'); } }, 50); })" % inst
+            "() => new Promise((res, rej) => { const t0 = Date.now(); "
+            "const t = setInterval(() => { if (%s) { clearInterval(t); res('ready'); } "
+            "else if (Date.now() - t0 > 10000) { clearInterval(t); "
+            "rej(new Error('scene: instance not ready after 10s')); } }, 50); })" % inst
         )
         lines.append(f"playwright-cli -s={s} eval {shlex.quote(wait)} >/dev/null")
     lines.append("")
