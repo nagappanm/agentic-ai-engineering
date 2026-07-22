@@ -297,37 +297,6 @@ exploring and re-approve through `cache_selectors.py` (the human gate holds).
 Each entry also carries a `confidence` score (tier × recency) so the next
 session trusts strong locators and re-checks weak ones.
 
-### Healer — propose a fix for a stale selector (deterministic)
-
-When a selector goes `stale`/`ambiguous` (or a Playwright test fails on it), you
-don't have to re-derive it by hand. `heal_selector.py` recovers the failing
-locator's *intent* and re-resolves it against a **fresh snapshot** of the page,
-following the same tier policy — closing the Planner → Generator → **Healer**
-loop with parts klew already owns:
-
-```bash
-playwright-cli snapshot --filename=after.txt        # fresh view of the drifted page
-python .claude/skills/klew/scripts/heal_selector.py \
-  --app <app> --name login.submit --snapshot after.txt            # human-review text
-python .claude/skills/klew/scripts/heal_selector.py \
-  --app <app> --name login.submit --snapshot after.txt --format json > heal.json
-```
-
-Common heal: an element kept its role but its name drifted (`'Login'` →
-`'Sign in'`) — a **high-confidence rename**. It can also **upgrade** a former
-`testid`/`css` locator back to a user-facing role when the app now exposes one.
-The healer is deliberately honest: if the intent is **ambiguous** (several
-equally good candidates) or **gone** (no compatible element), it refuses to guess
-and exits non-zero — re-run live exploration instead.
-
-Crucially, it **never writes the approved cache**. `--format json` emits a delta
-in the exact `cache_selectors.py --input` schema, so a healed selector goes
-through the *same* human gate as an original one:
-
-```bash
-python .claude/skills/klew/scripts/cache_selectors.py --app <app> --input heal.json --approved
-```
-
 ## Token-lean snapshots (diff, don't re-read)
 
 Between steps most of the page is unchanged. Save snapshots to files and feed
