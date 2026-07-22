@@ -38,6 +38,7 @@ never silent); omit the input entirely to opt out.
 |---|---|
 | `gate.py` | pure `decide()` + Playwright/testguard parsers + CLI |
 | `flakedoctor.py` | cross-run flakiness triage — regression (file bug) vs flaky (quarantine) |
+| `reqdrift.py` | requirement-drift watcher — flag tests whose requirement text changed |
 | `justify.py` | `judge(ui_touched, yilsf_result)` — is a cache delta warranted by the PR + requirement? |
 | `bug_report.py` | `format_bug()` — YAML-front-matter + markdown repro an LLM can parse |
 | `tracker.py` | file the bug: **Jira REST** / **GitHub `gh`** / `--dry-run`; dedup + link-to-story |
@@ -75,6 +76,40 @@ python pr_gate/flakedoctor.py --runs-dir .ci/history --glob 'run-*.json'
 `file_bug` list is the set of genuine regressions worth a ticket. Exit code is
 `20` iff any regression/stable-fail is present (mirrors the gate's red), else `0`.
 Deterministic, offline, no LLM. Tests: `tests/test_flakedoctor.py`.
+
+## Requirement drift (`reqdrift.py`)
+
+testguard/yilsf give *point-in-time* traceability (which requirement each test
+covers, right now). Nobody watches **drift over time**: a requirement's *text* is
+reworded and the tests written against the old wording keep passing — green, but
+no longer proving what the requirement now says. `reqdrift` catches that with the
+same fingerprint+drift idiom klew uses for knowledge notes.
+
+```bash
+# record the baseline once (human-approved, like a reconcile):
+python pr_gate/reqdrift.py --requirements e2e/requirements.txt --tests 'e2e/*.spec.ts' \
+  --baseline pr_gate/reqdrift.json --update-baseline
+
+# later, on every PR: did any requirement change under its tests?
+python pr_gate/reqdrift.py --requirements e2e/requirements.txt --tests 'e2e/*.spec.ts' \
+  --baseline pr_gate/reqdrift.json
+#   🟠 DRIFTED (1) — text changed; re-review the tracing tests:
+#      TMVC-5: todomvc-journeys.spec.ts
+```
+
+| signal | meaning | 
+|---|---|
+| `drifted` | requirement text changed → its tracing tests may be stale |
+| `removed` | requirement gone → its tests are now orphaned |
+| `new` | requirement added since the baseline (needs tests) |
+| `uncovered` | a current requirement no test traces to |
+
+Traceability is by the requirement id in a spec's test title (`test("… TMVC-1")`) —
+the convention testguard/pr_gate already use. Requirement text comes from
+`requirements_source.py` (the linked Jira ticket, else `e2e/requirements.txt`), so
+a Jira reword trips it too. Exit `10` when a drifted/removed requirement still has
+tracing tests to re-review (gateable → 🟠 review), else `0`. The hash normalizes
+whitespace/case, so only real word changes count. Tests: `tests/test_reqdrift.py`.
 
 MCP tools don't run inside a headless Action, so CI uses `gh` + Jira REST; an
 interactive Claude session can drive the same bug dict via the GitHub/Atlassian
