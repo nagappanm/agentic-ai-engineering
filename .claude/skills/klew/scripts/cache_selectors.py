@@ -48,6 +48,7 @@ from _common import (
     save_cache,
     today,
 )
+from scene_adapters import canonical_selector, validate_scene
 
 
 def _load_candidates(args: argparse.Namespace) -> dict:
@@ -69,11 +70,14 @@ def _validate(candidates: dict) -> None:
         if not isinstance(entry, dict):
             problems.append(f"{name}: entry must be an object")
             continue
-        if not entry.get("selector"):
-            problems.append(f"{name}: missing 'selector'")
         tier = entry.get("tier")
+        # 'scene' entries carry their identity in `scene` and derive `selector`.
+        if not entry.get("selector") and tier != "scene":
+            problems.append(f"{name}: missing 'selector'")
         if tier not in VALID_TIERS:
             problems.append(f"{name}: 'tier' must be one of {sorted(VALID_TIERS)} (got {tier!r})")
+        if tier == "scene":
+            problems += [f"{name}: {p}" for p in validate_scene(entry.get("scene"))]
     if problems:
         sys.exit("error: invalid candidates:\n  - " + "\n  - ".join(problems))
 
@@ -118,7 +122,7 @@ def main() -> None:
     def _nv(v):
         return "" if v in (None, "") else v
 
-    fields = ("selector", "tier", "page", "reason", "frame", "shadow")
+    fields = ("selector", "tier", "page", "reason", "frame", "shadow", "scene")
     new_names, changed_names, same_names = [], [], []
     for name, entry in candidates.items():
         existing = selectors.get(name)
@@ -163,8 +167,13 @@ def main() -> None:
         tier = entry["tier"]
         stamp = today()
         (added if name in new_names else updated).append(name)
+        # scene entries derive a canonical, human-readable selector from identity.
+        selector = entry.get("selector")
+        if tier == "scene" and not selector:
+            sc = entry["scene"]
+            selector = canonical_selector(sc["engine"], sc["by"], sc["value"])
         record = {
-            "selector": entry["selector"],
+            "selector": selector,
             "tier": tier,
             "page": entry.get("page", ""),
             "reason": entry.get("reason", ""),
@@ -178,6 +187,8 @@ def main() -> None:
             record["frame"] = entry["frame"]  # iframe selector, or list for nested frames
         if entry.get("shadow"):
             record["shadow"] = entry["shadow"]  # note: element is inside a shadow root
+        if tier == "scene":
+            record["scene"] = entry["scene"]  # {engine, instance, by, value}
         selectors[name] = record
 
     if args.changed_only and not added and not updated:

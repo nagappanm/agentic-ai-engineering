@@ -11,10 +11,58 @@ user-facing** locator that **uniquely** matches within the active tab's root.
 | 2. Label / text | `getByLabel('Email')`, `getByPlaceholder('Search')`, `getByText('Sign in', { exact: true })` | Form fields with labels; unique visible text; role name not distinctive. |
 | 3. Automation id | `getByTestId('submit')` → `[data-automation-id="submit"]` | Tiers 1–2 aren't unique/stable but the app exposes a stable test attribute. |
 | 4. CSS / structural | `#main > button.submit` | **Last resort.** Record why nothing above worked (no role, no label, no id). |
+| 5. Scene (canvas/WebGL) | `scene:sigma/label=Alice` | **Only when there is no DOM element at all** — the target is drawn inside a canvas/WebGL surface (e.g. a Sigma.js graph node). See "Scene tier" below. |
 
 Never cache an ephemeral `ref` (e.g. `e15`) — it is valid only for one snapshot
 of one tab. Refs are fine for *acting during* exploration; the cached artifact
-must be a tier 1–4 locator.
+must be a tier 1–5 locator.
+
+## Scene tier (canvas / WebGL) — tier 5
+
+Tiers 1–4 all assume a DOM node exists. A `<canvas>` (2D or WebGL) is a single
+opaque node: the shapes drawn inside it — Sigma.js graph nodes, chart marks,
+game sprites — have **no DOM element and no accessibility-tree presence**, so no
+`getBy*` or CSS locator can reach them. Reach for tier 5 **only after** confirming
+there is genuinely no DOM/ARIA element for the target (many canvas apps ship an
+HTML overlay or a search/filter control — prefer driving *that* with tiers 1–4).
+
+A scene entry caches the element's **durable logical identity**, not a pixel:
+
+```jsonc
+"graph.alice": {
+  "tier": "scene",
+  "page": "/",
+  "reason": "WebGL Sigma node; no DOM/a11y element — addressed by label",
+  "scene": {
+    "engine": "sigma",            // which adapter (scripts/scene_adapters.py)
+    "instance": "window.__sigma", // JS expr for the app's scene instance
+    "by": "label",                // identity key: label | id
+    "value": "Alice"              // the node's user-facing label/id
+  }
+}
+```
+
+`selector` is derived automatically (`scene:<engine>/<by>=<value>`). How that
+identity becomes an on-screen point lives in **one per-engine adapter**
+(`scripts/scene_adapters.py`), never in the cache entry — add an engine there and
+every scene entry for it works. Acting is `eval` (compute the point via the app's
+own transform, e.g. Sigma's `graphToViewport` — never a hardcoded pixel) + a real
+`mousemove`/`mousedown`/`mouseup` click, so the engine's own hit-testing fires:
+
+```bash
+# emit and run the click plan for a cached scene node
+scripts/scene_click.py --app <slug> --name graph.alice --open <url> | bash
+```
+
+`export_pom.py` emits a scene entry as an **async click method** (not a `Locator`
+getter): `await graph.alice()`.
+
+**Requirements & limits.** Tier 5 needs the app to expose a scene instance
+(`window.__sigma`, a chart instance, …). It is **always `a11y_flag: true`** — a
+canvas node absent from the accessibility tree is a real a11y gap, recorded as
+such. If the app exposes *no* reachable instance, resolve it first (probe a global,
+or inject an init-script before load to capture it); a sealed WebGL surface with no
+model is the only genuine wall → visual/OCR, outside klew.
 
 ## Uniqueness check (required before caching)
 

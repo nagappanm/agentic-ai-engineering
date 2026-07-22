@@ -1,0 +1,49 @@
+{
+  "app": "sigma-demo",
+  "base_url": "http://127.0.0.1:8123",
+  "updated": "2026-07-22",
+  "selectors": {
+    "graph.alice": {
+      "selector": "scene:sigma/label=Alice",
+      "tier": "scene",
+      "page": "/",
+      "reason": "WebGL Sigma node; no DOM/a11y element \u2014 addressed by label via graphToViewport",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "sigma",
+        "instance": "window.__sigma",
+        "by": "label",
+        "value": "Alice"
+      }
+    },
+    "graph.bob": {
+      "selector": "scene:sigma/label=Bob",
+      "tier": "scene",
+      "page": "/",
+      "reason": "WebGL Sigma node; no DOM/a11y element \u2014 addressed by label via graphToViewport",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "sigma",
+        "instance": "window.__sigma",
+        "by": "label",
+        "value": "Bob"
+      }
+    },
+    "search.input": {
+      "selector": "getByTestId('node-search')",
+      "tier": "testid",
+      "page": "/",
+      "reason": "DOM-control fallback: HTML search input klew drives natively",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.75,
+      "a11y_flag": true
+    }
+  }
+}

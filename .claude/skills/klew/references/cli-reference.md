@@ -66,6 +66,24 @@ playwright-cli hover <ref|locator>
 playwright-cli drag <startRef> <endRef>
 ```
 
+### Scene / canvas interaction (tier 5)
+
+For canvas/WebGL targets with no DOM element (see the selector policy's scene
+tier), the CLI can evaluate page JS and issue coordinate clicks — neither goes
+through a locator:
+
+```bash
+playwright-cli eval "() => { /* runs in page context, returns JSON */ }"
+playwright-cli --raw eval "() => window.__ksel.x"   # --raw prints just the value
+playwright-cli mousemove <x> <y>    # move to a computed point
+playwright-cli mousedown [button]   # then down + up = a real click that fires
+playwright-cli mouseup   [button]   # the canvas engine's own hit-testing
+```
+
+Compute the point from the element's identity via the app's own scene model
+(never a hardcoded pixel); `scripts/scene_click.py` emits this exact sequence for
+a cached scene entry.
+
 ### Element targeting
 
 - **Ref (fast, ephemeral):** `playwright-cli click e15`
@@ -181,9 +199,19 @@ The `Makefile` in this skill generates this config for you:
     "tier": "testid",
     "page": "/login",
     "reason": "role name not unique (two 'Submit' buttons); automation id is stable"
+  },
+  "graph.alice": {
+    "tier": "scene",         // canvas/WebGL node — no DOM element (see selector policy)
+    "page": "/",
+    "reason": "Sigma node; addressed by label, not a locator",
+    "scene": { "engine": "sigma", "instance": "window.__sigma", "by": "label", "value": "Alice" }
   }
 }
 ```
+
+`scene` entries omit `selector` (it is derived as `scene:<engine>/<by>=<value>`)
+and instead carry a `scene` descriptor; `tier` is `role | label-text | testid |
+css | scene`.
 
 The script merges these into `knowledge/<app>/selectors.json`, adding
 `status: "approved"`, `verified`, and top-level `updated`/`base_url`.

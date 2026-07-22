@@ -101,6 +101,12 @@ Prefer, in order:
    → `[data-automation-id="submit-button"]` per the config above.
 4. **CSS/structural** — `"#main > button.submit"` — **last resort only**, and
    record *why* nothing better was available.
+5. **Scene (canvas/WebGL)** — for targets drawn inside a `<canvas>` that have **no
+   DOM element** (e.g. Sigma.js graph nodes). Cache the node's logical identity
+   (`scene:sigma/label=Alice`) and act via `eval` + `mouse*` through the app's own
+   scene model — never a hardcoded pixel. Use only when tiers 1–4 find no DOM
+   element (prefer any HTML overlay/search control the app exposes). See the
+   selector policy's *Scene tier* and `scripts/scene_click.py`.
 
 During interaction you may click by the ephemeral `ref` from a snapshot (fast),
 but the locator you **cache** must be a stable one from tiers 1–3 whenever

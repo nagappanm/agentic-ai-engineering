@@ -24,6 +24,7 @@ import argparse
 import sys
 
 from _common import app_dir, load_cache
+from scene_adapters import point_expr
 
 
 def _member(rest: list[str]) -> str:
@@ -38,6 +39,13 @@ def _member(rest: list[str]) -> str:
 def _class_name(group: str) -> str:
     words = group.replace("-", "_").split("_")
     return "".join(w[:1].upper() + w[1:] for w in words if w) + "Page"
+
+
+def _indent(text: str, spaces: int) -> str:
+    """Indent every line after the first by `spaces` (for embedding a JS block)."""
+    pad = " " * spaces
+    head, *tail = text.split("\n")
+    return "\n".join([head] + [pad + t for t in tail])
 
 
 def _js_str(value: str) -> str:
@@ -116,6 +124,22 @@ def main() -> None:
                 n += 1
                 m = f"{member}{n}"
             seen.add(m)
+            if entry.get("tier") == "scene":
+                # A canvas/WebGL node has no DOM element, so it is exposed as an
+                # async click action (scene model -> point -> real mouse click)
+                # rather than a Locator getter.
+                sc = entry["scene"]
+                lines.append(
+                    f"  // tier=scene engine={sc.get('engine')} "
+                    f"confidence={entry.get('confidence')} "
+                    "[scene: canvas/WebGL node — no DOM; addressed by identity]"
+                )
+                expr = _indent(point_expr(sc), 6)
+                lines.append(f"  async {m}(): Promise<void> {{")
+                lines.append(f"    const pt = await this.page.evaluate({expr});")
+                lines.append("    await this.page.mouse.click(pt.x, pt.y);")
+                lines.append("  }")
+                continue
             note = f"  // tier={entry.get('tier')} confidence={entry.get('confidence')}"
             if entry.get("a11y_flag"):
                 note += " [a11y: non-user-facing locator]"
