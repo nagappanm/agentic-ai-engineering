@@ -10,7 +10,7 @@ what we build next.
 |---|---|---|
 | Deployment | Self-hosted, in-repo, your CI + your agent; data stays in your infra; free | Cloud SaaS; ~$16k–$55k/yr |
 | Authoring | Code-first Playwright on approved POMs **+ (Phase 1) record → journey** | No-code record / plain-English; more mature today |
-| Selectors / heal | Governed: user-facing-first policy, **human-approved cache**, confidence + a11y flags, deterministic `--audit` | Auto multi-selector + **visual AI**; opaque, robust to Shadow-DOM/iframe |
+| Selectors / heal | Governed: user-facing-first policy, **human-approved cache**, confidence + a11y flags, deterministic `--audit`; **Shadow-DOM/iframe recipes + canvas/WebGL scene tier (9 engines, via the app's own scene model — no pixels)** | Auto multi-selector + **visual AI** (pixel-based, opaque); robust to Shadow-DOM/iframe |
 | Governance | Approval gate; **delta → PR → human merge**; every change a git diff | Mostly autonomous self-heal |
 | Trust-grading | **testguard** scores generated tests, catches hallucinated selectors | Self-heal reduces flakiness; no public trust-score gate |
 | CI decisioning | **`pr_gate` 🟢/🟠/🔴** — auto-merge / review / file bug, requirement-justified | CI integrations, not this packaged gate |
@@ -51,6 +51,22 @@ sample apps + specs under `e2e/scene/` and `e2e/sigma/`):
 Adding a new engine is registering one adapter. Details: `references/selector-policy.md`
 §"Scene tier", and the headless-runner verdict in `e2e/sigma/FINDINGS.md` ("YES on
 both counts — individual nodes clickable with no hardcoded pixels, through klew").
+
+## Accessibility audit — `a11y_report` (shipped)
+
+Accessibility is a **byproduct** of klew's exploration: any element it could only
+reach at the test-id/CSS tier gets an `a11y_flag` (it lacks a distinctive
+role+name — usually a real defect). `scripts/a11y_report.py` promotes that one-line
+flag into a **standalone, WCAG-referenced audit** — a deliverable a team or a
+compliance reviewer (European Accessibility Act) can act on. Deterministic and
+offline, from two sources: the **approved cache** (every `a11y_flag` → an
+`A11Y-ROLE` finding) and an optional **fresh a11y snapshot** (`--snapshot`:
+interactive elements with no accessible name, images with no alt text,
+heading-level jumps, duplicated landmarks). Emits `--format text|json|md`, and
+gates CI with `--fail-on serious|moderate|minor`.
+
+    a11y_report.py --app <app> --snapshot page.txt --format md > a11y.md
+    a11y_report.py --app <app> --format json --fail-on serious   # CI gate
 
 ## Phase 1 (this increment) — no-code recorder → klew journey
 
