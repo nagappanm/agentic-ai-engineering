@@ -44,13 +44,44 @@ make author APP=<app> CODEGEN=rec.spec.ts NAME=<slug> REQ=<ID>
 Deterministic (no LLM), reuses the approval + POM + gate pipeline. See
 `.claude/skills/klew/scripts/author_journey.py`.
 
+## Built, pending integration (gate wiring)
+
+Two `pr_gate` tools are **built and unit-tested but not yet wired into
+`klew-pr-gate.yml`** — they run standalone today, so they add nothing per-PR until
+integrated. Both share the gate's DNA: deterministic, offline, no LLM, and exit
+codes that mirror the gate (`0`/`10`/`20`).
+
+1. **flakedoctor** (`pr_gate/flakedoctor.py`) — cross-run flakiness triage. The gate
+   grades one run with no memory, so an intermittently-failing journey files a bug on
+   every unlucky run. flakedoctor reads the last N Playwright reports and classifies
+   each journey by history shape: regression / stable-fail → 🔴 file a bug;
+   **flaky → 🟠 quarantine (do NOT file)**; recovered / stable-pass → 🟢.
+   *Pending:* a workflow step after the journey suite that restores the last N
+   `results.json` from a run-history store (Actions cache/artifacts), runs
+   flakedoctor, and gates bug-filing on its advice — so only real regressions file
+   bugs. *Blocker:* decide where run history lives.
+
+2. **reqdrift** (`pr_gate/reqdrift.py`) — requirement-text drift. testguard/`yilsf`
+   give *point-in-time* traceability; nobody watches a requirement's **text** changing
+   under a still-green test. reqdrift fingerprints each requirement (same idiom as the
+   knowledge-note signature), stores a human-approved baseline, and flags **drifted**
+   (text changed → tests may be stale, 🟠), **removed** (🔴 orphaned tests), **new**,
+   and **uncovered**. Bridges the `yilsf`/testguard traceability domain into the gate.
+   *Pending:* commit a baseline (`pr_gate/reqdrift.json`), add a per-PR workflow step,
+   and feed a drift result into the gate as a 🟠 signal (beside the existing
+   knowledge-drift signal).
+
+Both follow the same shipped pattern — a fingerprint+baseline and gate-mirrored exit
+codes — so integration is **wiring, not new design**.
+
 ## Later phases (named, not yet built)
 
 1. **Visual regression** — `toHaveScreenshot` baselines in journeys, surfaced as a
    `pr_gate` signal (🟠 on visual drift). Closes SmartBear's visual-AI edge.
 2. **Cross-browser + mobile matrix** — run journeys across chromium/firefox/webkit
    + device emulation in `pr_gate`.
-3. **Shadow-DOM / iframe patterns** — first-class recipes in the selector policy.
+3. **Shadow-DOM / iframe patterns** — ✅ **shipped**: first-class recipes in the
+   selector policy (`references/selector-policy.md`).
 4. **Zephyr / Jira test-management sync** — push journey results as Jira test
    executions; two-way requirement ↔ journey linkage.
 5. **Plain-English authoring** — ✅ **shipped**: the klew agent turns NL steps into
