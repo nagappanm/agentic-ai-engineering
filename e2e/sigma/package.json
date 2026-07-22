@@ -1,0 +1,11 @@
+{
+  "name": "sigma-canvas-spike",
+  "private": true,
+  "type": "module",
+  "description": "Feasibility spike: driving a Sigma.js (WebGL) graph via the scene model on a headless/remote runner, and testing a CDP bridge to a klew CLI session.",
+  "scripts": {
+    "serve": "python3 -m http.server 8123 --directory app",
+    "test": "playwright test"
+  },
+  "devDependencies": { "@playwright/test": "^1.48.0" }
+}
