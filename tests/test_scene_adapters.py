@@ -26,7 +26,9 @@ sys.path.insert(
 scene_adapters = pytest.importorskip("scene_adapters")
 
 ENGINES = scene_adapters.supported_engines()
-EXPECTED = {"sigma", "chartjs", "fabric", "pixi", "konva", "echarts", "cytoscape", "three", "phaser"}
+EXPECTED = {
+    "sigma", "chartjs", "fabric", "pixi", "konva", "echarts", "cytoscape", "three", "phaser",
+}
 
 
 def _scene(engine, value="Alpha", by="name", instance="window.__x"):

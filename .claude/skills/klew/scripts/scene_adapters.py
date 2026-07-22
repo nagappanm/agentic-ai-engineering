@@ -26,7 +26,8 @@ against live sample apps in `e2e/scene` and `e2e/sigma`.
 from __future__ import annotations
 
 import json
-from typing import Callable, NamedTuple
+from collections.abc import Callable
+from typing import NamedTuple
 
 # builder(instance_expr, scene_dict) -> JS arrow function text
 _Builder = Callable[[str, dict], str]
@@ -41,6 +42,19 @@ class _Engine(NamedTuple):
 def _js(value) -> str:
     """A safely-quoted JS literal."""
     return json.dumps(value)
+
+
+def _sub(template: str, **subs: object) -> str:
+    """Fill %(name)s / %(name)d tokens without the ``%`` operator.
+
+    The templates are JS payloads full of literal ``{ }`` braces, so f-strings and
+    ``str.format`` would misread them; a plain ``.replace()`` is safe (and keeps
+    ruff's UP031 happy, which flags printf-style ``%`` formatting).
+    """
+    for name, value in subs.items():
+        template = template.replace(f"%({name})s", str(value))
+        template = template.replace(f"%({name})d", str(value))
+    return template
 
 
 # --- Sigma.js (WebGL graph) ---------------------------------------------------
@@ -141,7 +155,7 @@ _PIXI_FIND = (
 
 def _pixi_point(instance: str, scene: dict) -> str:
     by, val = _js(scene["by"]), _js(scene["value"])
-    find = _PIXI_FIND % {"by": by, "val": val}
+    find = _sub(_PIXI_FIND, by=by, val=val)
     return f"""() => {{
   const app = {instance};
   if (!app) throw new Error('scene/pixi: instance not found');
@@ -177,7 +191,7 @@ _KONVA_FIND = (
 
 
 def _konva_point(instance: str, scene: dict) -> str:
-    return (
+    return _sub(
         "() => {\n"
         "  const s = %(inst)s;\n"
         "  if (!s) throw new Error('scene/konva: instance not found');\n"
@@ -189,15 +203,18 @@ def _konva_point(instance: str, scene: dict) -> str:
         "  const pt = { x: Math.round(r.left + box.x + box.width / 2),\n"
         "               y: Math.round(r.top + box.y + box.height / 2) };\n"
         "  window.__ksel = pt; return pt;\n"
-        "}"
-    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+        "}",
+        inst=instance, by=_js(scene["by"]), val=_js(scene["value"]),
+    )
 
 
 def _konva_count(instance: str, scene: dict) -> str:
-    return (
+    return _sub(
         "() => { const s = %(inst)s; if (!s) return 0; " + _KONVA_FIND
-        + "return list.filter(n => String(get(n)).toLowerCase() === %(val)s.toLowerCase()).length; }"
-    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+        + "return list.filter(n => String(get(n)).toLowerCase() "
+        "=== %(val)s.toLowerCase()).length; }",
+        inst=instance, by=_js(scene["by"]), val=_js(scene["value"]),
+    )
 
 
 # --- ECharts (2D canvas) ------------------------------------------------------
@@ -206,7 +223,7 @@ def _konva_count(instance: str, scene: dict) -> str:
 
 def _echarts_point(instance: str, scene: dict) -> str:
     si = int(scene.get("series", 0))
-    return (
+    return _sub(
         "() => {\n"
         "  const c = %(inst)s;\n"
         "  if (!c) throw new Error('scene/echarts: instance not found');\n"
@@ -221,16 +238,18 @@ def _echarts_point(instance: str, scene: dict) -> str:
         "  const r = c.getDom().getBoundingClientRect();\n"
         "  const pt = { x: Math.round(r.left + p[0]), y: Math.round(r.top + y) };\n"
         "  window.__ksel = pt; return pt;\n"
-        "}"
-    ) % {"inst": instance, "val": _js(scene["value"]), "si": si}
+        "}",
+        inst=instance, val=_js(scene["value"]), si=si,
+    )
 
 
 def _echarts_count(instance: str, scene: dict) -> str:
-    return (
+    return _sub(
         "() => { const c = %(inst)s; if (!c) return 0; const o = c.getOption(); "
         "const cats = (o.xAxis && o.xAxis[0] && o.xAxis[0].data) || []; "
-        "return cats.filter(v => String(v).toLowerCase() === %(val)s.toLowerCase()).length; }"
-    ) % {"inst": instance, "val": _js(scene["value"])}
+        "return cats.filter(v => String(v).toLowerCase() === %(val)s.toLowerCase()).length; }",
+        inst=instance, val=_js(scene["value"]),
+    )
 
 
 # --- Cytoscape.js (2D canvas graph) -------------------------------------------
@@ -245,26 +264,30 @@ _CY_FIND = (
 
 
 def _cytoscape_point(instance: str, scene: dict) -> str:
-    return (
+    return _sub(
         "() => {\n"
         "  const cy = %(inst)s;\n"
         "  if (!cy) throw new Error('scene/cytoscape: instance not found');\n"
         "  " + _CY_FIND + "\n"
-        "  if (!node || node.length === 0) throw new Error('scene/cytoscape: no ' + by + '=' + val);\n"
+        "  if (!node || node.length === 0)\n"
+        "    throw new Error('scene/cytoscape: no ' + by + '=' + val);\n"
         "  const rp = node.renderedPosition();\n"
         "  const r = cy.container().getBoundingClientRect();\n"
         "  const pt = { x: Math.round(r.left + rp.x), y: Math.round(r.top + rp.y) };\n"
         "  window.__ksel = pt; return pt;\n"
-        "}"
-    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+        "}",
+        inst=instance, by=_js(scene["by"]), val=_js(scene["value"]),
+    )
 
 
 def _cytoscape_count(instance: str, scene: dict) -> str:
-    return (
+    return _sub(
         "() => { const cy = %(inst)s; if (!cy) return 0; " + _CY_FIND
         + "return by === 'id' ? (node && node.length ? 1 : 0) "
-        ": cy.nodes().filter(n => String(n.data(by)).toLowerCase() === val.toLowerCase()).length; }"
-    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+        ": cy.nodes().filter(n => String(n.data(by)).toLowerCase() "
+        "=== val.toLowerCase()).length; }",
+        inst=instance, by=_js(scene["by"]), val=_js(scene["value"]),
+    )
 
 
 # --- three.js (3D WebGL) ------------------------------------------------------
@@ -276,7 +299,7 @@ def _cytoscape_count(instance: str, scene: dict) -> str:
 def _three_point(instance: str, scene: dict) -> str:
     # Case-insensitive traversal — matches _three_count (and every other engine),
     # so an audit count of 1 and the click always agree on the same object.
-    return (
+    return _sub(
         "() => {\n"
         "  const t = %(inst)s;\n"
         "  if (!t) throw new Error('scene/three: instance not found');\n"
@@ -291,16 +314,18 @@ def _three_point(instance: str, scene: dict) -> str:
         "  const pt = { x: Math.round(r.left + (v.x * 0.5 + 0.5) * r.width),\n"
         "               y: Math.round(r.top + (-v.y * 0.5 + 0.5) * r.height) };\n"
         "  window.__ksel = pt; return pt;\n"
-        "}"
-    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+        "}",
+        inst=instance, by=_js(scene["by"]), val=_js(scene["value"]),
+    )
 
 
 def _three_count(instance: str, scene: dict) -> str:
-    return (
+    return _sub(
         "() => { const t = %(inst)s; if (!t) return 0; let c = 0; "
         "t.scene.traverse(o => { if (o[%(by)s] != null && "
-        "String(o[%(by)s]).toLowerCase() === %(val)s.toLowerCase()) c++; }); return c; }"
-    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+        "String(o[%(by)s]).toLowerCase() === %(val)s.toLowerCase()) c++; }); return c; }",
+        inst=instance, by=_js(scene["by"]), val=_js(scene["value"]),
+    )
 
 
 # --- Phaser (2D/WebGL game engine) --------------------------------------------
@@ -308,7 +333,7 @@ def _three_count(instance: str, scene: dict) -> str:
 # (scroll + zoom). `instance` is the active Scene.
 
 def _phaser_point(instance: str, scene: dict) -> str:
-    return (
+    return _sub(
         "() => {\n"
         "  const s = %(inst)s;\n"
         "  if (!s) throw new Error('scene/phaser: instance not found');\n"
@@ -320,16 +345,18 @@ def _phaser_point(instance: str, scene: dict) -> str:
         "  const pt = { x: Math.round(r.left + (o.x - cam.scrollX) * cam.zoom),\n"
         "               y: Math.round(r.top + (o.y - cam.scrollY) * cam.zoom) };\n"
         "  window.__ksel = pt; return pt;\n"
-        "}"
-    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+        "}",
+        inst=instance, by=_js(scene["by"]), val=_js(scene["value"]),
+    )
 
 
 def _phaser_count(instance: str, scene: dict) -> str:
-    return (
+    return _sub(
         "() => { const s = %(inst)s; if (!s) return 0; "
         "return s.children.list.filter(o => o[%(by)s] != null && "
-        "String(o[%(by)s]).toLowerCase() === %(val)s.toLowerCase()).length; }"
-    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+        "String(o[%(by)s]).toLowerCase() === %(val)s.toLowerCase()).length; }",
+        inst=instance, by=_js(scene["by"]), val=_js(scene["value"]),
+    )
 
 
 # engine name -> _Engine(default instance, point builder, count builder)

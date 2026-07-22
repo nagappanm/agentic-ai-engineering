@@ -34,9 +34,14 @@ def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("--app", required=True, help="application slug")
-    ap.add_argument("--name", required=True, help="logical name of the scene entry (e.g. graph.alice)")
+    ap.add_argument(
+        "--name", required=True, help="logical name of the scene entry (e.g. graph.alice)"
+    )
     ap.add_argument("--session", default="scene", help="playwright-cli session name")
-    ap.add_argument("--open", dest="open_url", default=None, help="open this URL first (else reuse session)")
+    ap.add_argument(
+        "--open", dest="open_url", default=None,
+        help="open this URL first (else reuse session)",
+    )
     ap.add_argument("--config", default=None, help="playwright-cli --config for the open")
     ap.add_argument("--verify", default=None, help="JS arrow fn whose result is asserted")
     ap.add_argument("--expect", default=None, help="expected string value of --verify")
@@ -65,9 +70,10 @@ def main() -> None:
         inst = scene.get("instance") or default_instance(scene["engine"])
         wait = (
             "() => new Promise((res, rej) => { const t0 = Date.now(); "
-            "const t = setInterval(() => { if (%s) { clearInterval(t); res('ready'); } "
+            "const t = setInterval(() => { "
+            "if (" + inst + ") { clearInterval(t); res('ready'); } "
             "else if (Date.now() - t0 > 10000) { clearInterval(t); "
-            "rej(new Error('scene: instance not ready after 10s')); } }, 50); })" % inst
+            "rej(new Error('scene: instance not ready after 10s')); } }, 50); })"
         )
         lines.append(f"playwright-cli -s={s} eval {shlex.quote(wait)} >/dev/null")
     lines.append("")

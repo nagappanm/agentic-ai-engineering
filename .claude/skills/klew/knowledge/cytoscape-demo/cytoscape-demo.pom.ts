@@ -12,7 +12,8 @@ export class NodesPage {
         const cy = window.__cy;
         if (!cy) throw new Error('scene/cytoscape: instance not found');
         const by = "label", val = "Node B"; const node = by === 'id' ? cy.getElementById(val) : cy.nodes().filter(n => String(n.data(by)).toLowerCase() === val.toLowerCase())[0]; 
-        if (!node || node.length === 0) throw new Error('scene/cytoscape: no ' + by + '=' + val);
+        if (!node || node.length === 0)
+          throw new Error('scene/cytoscape: no ' + by + '=' + val);
         const rp = node.renderedPosition();
         const r = cy.container().getBoundingClientRect();
         const pt = { x: Math.round(r.left + rp.x), y: Math.round(r.top + rp.y) };
@@ -26,7 +27,8 @@ export class NodesPage {
         const cy = window.__cy;
         if (!cy) throw new Error('scene/cytoscape: instance not found');
         const by = "label", val = "Node C"; const node = by === 'id' ? cy.getElementById(val) : cy.nodes().filter(n => String(n.data(by)).toLowerCase() === val.toLowerCase())[0]; 
-        if (!node || node.length === 0) throw new Error('scene/cytoscape: no ' + by + '=' + val);
+        if (!node || node.length === 0)
+          throw new Error('scene/cytoscape: no ' + by + '=' + val);
         const rp = node.renderedPosition();
         const r = cy.container().getBoundingClientRect();
         const pt = { x: Math.round(r.left + rp.x), y: Math.round(r.top + rp.y) };
