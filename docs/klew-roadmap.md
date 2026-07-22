@@ -27,7 +27,17 @@ We deliberately do **not** chase Reflect's "auto-heal-and-forget." Our equivalen
 is **governed**: `cache_selectors.py --audit` re-validates cached selectors, a
 stale/renamed selector surfaces in CI as a 🔴 red journey (bug filed) or, when a
 selector legitimately moved, as a selector-cache **delta PR** a human merges. Self
--heal is a *reviewable event*, not a silent mutation. No new work needed here.
+-heal is a *reviewable event*, not a silent mutation.
+
+**The Healer (`heal_selector.py`) closes the Planner → Generator → Healer loop**
+— the 2026 self-healing pattern — with parts we already own (yilsf plans,
+klew/`author_nl` generates, this heals). Given a fresh page snapshot it
+deterministically re-resolves a failing locator's *intent* (role/label/text)
+back to the most durable unique locator, **upgrading** a former test-id to a
+user-facing role when the app now allows it, and emits a `cache_selectors
+--input` **delta** — never a silent write. It refuses to guess on ambiguity and
+exits non-zero. So the difference from Reflect stands: our heal is a *proposed*
+diff a human approves, not an autonomous mutation.
 
 ## Phase 1 (this increment) — no-code recorder → klew journey
 

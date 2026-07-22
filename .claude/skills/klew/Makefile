@@ -44,7 +44,7 @@ TESTID_ATTR   ?= data-testid
 PW_EXECUTABLE ?=
 PW_SANDBOX    ?= true
 
-.PHONY: help install config plan record author author-nl open snapshot cache cache-delta cache-check knowledge-check knowledge-scaffold audit-plan audit-apply pom handoff clean
+.PHONY: help install config plan record author author-nl open snapshot cache cache-delta cache-check knowledge-check knowledge-scaffold audit-plan audit-apply heal pom handoff clean
 
 help:            ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -117,6 +117,11 @@ audit-plan:      ## Print the live re-validation checklist for a cached app
 audit-apply:     ## Apply audit results (RESULTS=results.json of {name: match_count})
 	@test -n "$(RESULTS)" || { echo "set RESULTS=<results.json>"; exit 2; }
 	$(PY) $(SCRIPTS)/audit_selectors.py --app "$(APP)" --apply-results "$(RESULTS)"
+
+heal:            ## Propose a fix for a stale selector vs a fresh SNAPSHOT (NAME or SELECTOR; no write)
+	@test -n "$(SNAPSHOT)" || { echo "set SNAPSHOT=<fresh playwright-cli snapshot>"; exit 2; }
+	@test -n "$(NAME)$(SELECTOR)" || { echo "set NAME=<logical.name> or SELECTOR=<locator>"; exit 2; }
+	$(PY) $(SCRIPTS)/heal_selector.py --app "$(APP)" $(if $(NAME),--name "$(NAME)") $(if $(SELECTOR),--selector "$(SELECTOR)") --snapshot "$(SNAPSHOT)" $(if $(JSON),--format json)
 
 pom:             ## Export the approved cache to a Playwright Page Object
 	$(PY) $(SCRIPTS)/export_pom.py --app "$(APP)" --min-confidence "$(MIN_CONF)"
