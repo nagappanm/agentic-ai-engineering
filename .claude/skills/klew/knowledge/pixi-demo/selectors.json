@@ -1,0 +1,39 @@
+{
+  "app": "pixi-demo",
+  "base_url": "http://127.0.0.1:8123",
+  "updated": "2026-07-22",
+  "selectors": {
+    "nodes.two": {
+      "selector": "scene:pixi/label=Two",
+      "tier": "scene",
+      "page": "/pixi.html",
+      "reason": "Pixi display object; addressed by its label",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "pixi",
+        "instance": "window.__PIXI_APP__",
+        "by": "label",
+        "value": "Two"
+      }
+    },
+    "nodes.three": {
+      "selector": "scene:pixi/label=Three",
+      "tier": "scene",
+      "page": "/pixi.html",
+      "reason": "Pixi display object; addressed by its label",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "pixi",
+        "instance": "window.__PIXI_APP__",
+        "by": "label",
+        "value": "Three"
+      }
+    }
+  }
+}

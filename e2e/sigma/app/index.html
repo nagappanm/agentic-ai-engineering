@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sigma graph — canvas automation target</title>
+  <!-- Self-contained: vendored UMD builds, no CDN (runner is egress-gated). -->
+  <script src="./vendor/graphology.umd.min.js"></script>
+  <script src="./vendor/sigma.min.js"></script>
+  <style>
+    html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
+    #graph { position: absolute; inset: 0 0 60px 0; }
+    #panel {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 60px;
+      display: flex; align-items: center; gap: 12px; padding: 0 12px;
+      background: #f3f4f6; border-top: 1px solid #d1d5db; box-sizing: border-box;
+    }
+    #selected { font-weight: 600; }
+    #selected b { color: #2563eb; }
+  </style>
+</head>
+<body>
+  <!-- Sigma renders nodes/edges to a WebGL <canvas> inside this container.
+       The graph nodes are NOT DOM elements. -->
+  <div id="graph"></div>
+
+  <!-- Observable state: the label of the last clicked/selected node. Everything
+       (raw Playwright, the CDP bridge, and klew via a11y snapshot) asserts on this. -->
+  <div id="panel">
+    <span id="selected" data-test="selected-node">Selected: <b>none</b></span>
+    <!-- DOM-control path: a plain HTML input klew CAN drive to select a node
+         without ever touching canvas pixels. -->
+    <input id="search" data-test="node-search" placeholder="node label…" aria-label="node search" />
+    <button id="search-go" data-test="search-go">Select</button>
+  </div>
+
+  <script>
+    // graphology UMD default export is the Graph class.
+    const Graph = window.graphology.Graph || window.graphology;
+
+    const graph = new Graph();
+    // Hand-placed at fixed graph coordinates → deterministic positions for tests.
+    const NODES = [
+      { id: "alice", label: "Alice", x: 0,  y: 0,  color: "#e11d48" },
+      { id: "bob",   label: "Bob",   x: 10, y: 2,  color: "#2563eb" },
+      { id: "carol", label: "Carol", x: 4,  y: 9,  color: "#16a34a" },
+      { id: "dave",  label: "Dave",  x: -8, y: 5,  color: "#d97706" },
+      { id: "erin",  label: "Erin",  x: -3, y: -7, color: "#7c3aed" },
+    ];
+    NODES.forEach(n => graph.addNode(n.id, { label: n.label, x: n.x, y: n.y, size: 18, color: n.color }));
+    graph.addEdge("alice", "bob");
+    graph.addEdge("alice", "carol");
+    graph.addEdge("bob", "carol");
+    graph.addEdge("alice", "dave");
+    graph.addEdge("carol", "erin");
+
+    const container = document.getElementById("graph");
+    // Default renderer is WebGL — this is the "canvas has no DOM nodes" case.
+    const renderer = new window.Sigma(graph, container, { renderLabels: true });
+
+    const selectedEl = document.querySelector("#selected b");
+    function select(nodeId) {
+      const label = graph.getNodeAttribute(nodeId, "label");
+      selectedEl.textContent = label;
+      window.__lastSelected = { id: nodeId, label };
+    }
+
+    // Real hit-testing: a genuine click on a node's pixels fires this.
+    renderer.on("clickNode", ({ node }) => select(node));
+
+    // DOM-control path: label -> node -> select + center (no pixel math).
+    function selectByLabel(label) {
+      const id = graph.findNode((n, a) => a.label.toLowerCase() === label.trim().toLowerCase());
+      if (!id) return false;
+      select(id);
+      const p = renderer.getNodeDisplayData(id);
+      if (p) renderer.getCamera().animate({ x: p.x, y: p.y, ratio: renderer.getCamera().ratio }, { duration: 100 });
+      return true;
+    }
+    document.getElementById("search-go").addEventListener("click", () => {
+      selectByLabel(document.getElementById("search").value);
+    });
+
+    // Expose the instance + graph for the scene-model approach (represents the
+    // common "app exposes its Sigma instance" case).
+    window.__sigma = renderer;
+    window.__graph = graph;
+
+    // Signal readiness for tests: instance built + one frame painted.
+    requestAnimationFrame(() => { window.__sigmaReady = true; });
+  </script>
+</body>
+</html>

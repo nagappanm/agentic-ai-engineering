@@ -1,0 +1,39 @@
+{
+  "app": "konva-demo",
+  "base_url": "http://127.0.0.1:8123",
+  "updated": "2026-07-22",
+  "selectors": {
+    "shapes.blue": {
+      "selector": "scene:konva/name=Blue",
+      "tier": "scene",
+      "page": "/konva.html",
+      "reason": "Konva shape by name",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "konva",
+        "instance": "window.__konva",
+        "by": "name",
+        "value": "Blue"
+      }
+    },
+    "shapes.green": {
+      "selector": "scene:konva/name=Green",
+      "tier": "scene",
+      "page": "/konva.html",
+      "reason": "Konva shape by name",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "konva",
+        "instance": "window.__konva",
+        "by": "name",
+        "value": "Green"
+      }
+    }
+  }
+}

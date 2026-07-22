@@ -14,14 +14,18 @@ from pathlib import Path
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 KNOWLEDGE = SKILL_ROOT / "knowledge"
 
-VALID_TIERS = {"role", "label-text", "testid", "css"}
+VALID_TIERS = {"role", "label-text", "testid", "css", "scene"}
 
 # Durability weight per selector tier (user-facing = higher).
-TIER_WEIGHT = {"role": 1.0, "label-text": 0.9, "testid": 0.75, "css": 0.4}
+# 'scene' addresses a canvas/WebGL node by its logical identity (label/id) via
+# the app's own scene model — durable and user-facing, but it depends on the app
+# exposing a scene instance, so it sits just under 'testid'.
+TIER_WEIGHT = {"role": 1.0, "label-text": 0.9, "testid": 0.75, "scene": 0.7, "css": 0.4}
 
 # Tiers that only got used because nothing more user-facing was unique — a
-# likely accessibility gap (element lacks a distinctive role+name).
-A11Y_FLAG_TIERS = {"testid", "css"}
+# likely accessibility gap (element lacks a distinctive role+name). 'scene' is
+# always flagged: a canvas/WebGL node is absent from the accessibility tree.
+A11Y_FLAG_TIERS = {"testid", "css", "scene"}
 
 # Confidence recency: full for fresh, floors at 0.5 after this many days.
 RECENCY_FLOOR = 0.5

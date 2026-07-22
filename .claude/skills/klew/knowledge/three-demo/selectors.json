@@ -1,0 +1,39 @@
+{
+  "app": "three-demo",
+  "base_url": "http://127.0.0.1:8123",
+  "updated": "2026-07-22",
+  "selectors": {
+    "objects.sphere": {
+      "selector": "scene:three/name=Sphere",
+      "tier": "scene",
+      "page": "/three.html",
+      "reason": "three.js mesh by name",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "three",
+        "instance": "window.__three",
+        "by": "name",
+        "value": "Sphere"
+      }
+    },
+    "objects.pyramid": {
+      "selector": "scene:three/name=Pyramid",
+      "tier": "scene",
+      "page": "/three.html",
+      "reason": "three.js mesh by name",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "three",
+        "instance": "window.__three",
+        "by": "name",
+        "value": "Pyramid"
+      }
+    }
+  }
+}

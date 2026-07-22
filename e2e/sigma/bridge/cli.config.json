@@ -1,0 +1,12 @@
+{
+  "browser": {
+    "browserName": "chromium",
+    "launchOptions": {
+      "headless": true,
+      "chromiumSandbox": false,
+      "executablePath": "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+      "args": ["--no-sandbox"]
+    },
+    "contextOptions": { "viewport": { "width": 900, "height": 700 } }
+  }
+}

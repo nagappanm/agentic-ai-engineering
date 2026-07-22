@@ -4,6 +4,12 @@ import { defineConfig } from "@playwright/test";
 // Chromium is pre-installed and must run without its sandbox (root).
 export default defineConfig({
   testDir: ".",
+  // The klew PR gate serves ONE app (e2e/app, TodoMVC) on :8123 and runs this
+  // config across e2e/. The canvas/WebGL scene demos under sigma/ and scene/ are
+  // self-contained: each ships its OWN app + playwright.config and is run from
+  // its own directory (see e2e/sigma, e2e/scene). Exclude them here so the gate's
+  // TodoMVC journey run doesn't pick them up and time out against the wrong app.
+  testIgnore: ["sigma/**", "scene/**"],
   reporter: [["list"]],
   use: {
     baseURL: process.env.BASE_URL ?? "http://127.0.0.1:8123",

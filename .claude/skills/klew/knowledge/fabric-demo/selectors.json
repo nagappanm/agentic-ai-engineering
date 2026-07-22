@@ -1,0 +1,39 @@
+{
+  "app": "fabric-demo",
+  "base_url": "http://127.0.0.1:8123",
+  "updated": "2026-07-22",
+  "selectors": {
+    "shapes.beta": {
+      "selector": "scene:fabric/name=Beta",
+      "tier": "scene",
+      "page": "/fabric.html",
+      "reason": "Fabric object; addressed by its name property",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "fabric",
+        "instance": "window.__fabric",
+        "by": "name",
+        "value": "Beta"
+      }
+    },
+    "shapes.gamma": {
+      "selector": "scene:fabric/name=Gamma",
+      "tier": "scene",
+      "page": "/fabric.html",
+      "reason": "Fabric object; addressed by its name property",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "fabric",
+        "instance": "window.__fabric",
+        "by": "name",
+        "value": "Gamma"
+      }
+    }
+  }
+}

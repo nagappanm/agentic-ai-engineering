@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Fabric.js — scene target</title>
+  <script src="./vendor/fabric.min.js"></script>
+  <style>
+    html,body{margin:0;font-family:system-ui,sans-serif}
+    #panel{padding:8px 12px;background:#f3f4f6;border-top:1px solid #d1d5db}
+    #selected b{color:#2563eb}
+  </style>
+</head>
+<body>
+  <canvas id="c" width="640" height="420"></canvas>
+  <div id="panel"><span id="selected" data-test="selected-node">Selected: <b>none</b></span></div>
+  <script>
+    const selEl = document.querySelector('#selected b');
+    function select(name){ selEl.textContent = name; window.__lastSelected = name; }
+
+    const canvas = new fabric.Canvas('c', { selection: false });
+    const shapes = [
+      { name: 'Alpha', left: 80,  top: 90,  fill: '#e11d48' },
+      { name: 'Beta',  left: 300, top: 140, fill: '#2563eb' },
+      { name: 'Gamma', left: 480, top: 260, fill: '#16a34a' },
+    ];
+    for (const s of shapes) {
+      const r = new fabric.Rect({ left: s.left, top: s.top, width: 90, height: 60,
+        fill: s.fill, selectable: false, hoverCursor: 'pointer' });
+      r.name = s.name;                 // custom identity property
+      canvas.add(r);
+    }
+    // Real hit-testing: a click reports the object under the pointer.
+    canvas.on('mouse:down', (opt) => { if (opt.target) select(opt.target.name); });
+
+    window.__fabric = canvas;
+    requestAnimationFrame(() => { window.__sceneReady = true; });
+  </script>
+</body>
+</html>

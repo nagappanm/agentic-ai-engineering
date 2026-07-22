@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Konva — scene target</title>
+  <script src="./vendor/konva.min.js"></script>
+  <style>
+    html,body{margin:0;font-family:system-ui,sans-serif}
+    #panel{padding:8px 12px;background:#f3f4f6;border-top:1px solid #d1d5db}
+    #selected b{color:#2563eb}
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="panel"><span id="selected" data-test="selected-node">Selected: <b>none</b></span></div>
+  <script>
+    const selEl = document.querySelector('#selected b');
+    function select(name){ selEl.textContent = name; window.__lastSelected = name; }
+
+    const stage = new Konva.Stage({ container: 'stage', width: 640, height: 420 });
+    const layer = new Konva.Layer();
+    stage.add(layer);
+    const shapes = [
+      { name: 'Red',   x: 120, y: 110, fill: '#e11d48' },
+      { name: 'Blue',  x: 340, y: 200, fill: '#2563eb' },
+      { name: 'Green', x: 500, y: 300, fill: '#16a34a' },
+    ];
+    for (const s of shapes) {
+      const r = new Konva.Rect({ x: s.x - 45, y: s.y - 30, width: 90, height: 60,
+        fill: s.fill, name: s.name });
+      r.on('click', () => select(s.name));   // real Konva hit-testing
+      layer.add(r);
+    }
+    layer.draw();
+
+    window.__konva = stage;
+    requestAnimationFrame(() => { window.__sceneReady = true; });
+  </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "scene-engines-spike",
+  "private": true,
+  "type": "module",
+  "description": "Scene-tier engine coverage: Chart.js / Fabric.js / PixiJS sample apps + a spec that drives each via its klew-generated Page Object.",
+  "scripts": {
+    "serve": "python3 -m http.server 8123",
+    "test": "playwright test"
+  },
+  "devDependencies": { "@playwright/test": "^1.48.0" }
+}
