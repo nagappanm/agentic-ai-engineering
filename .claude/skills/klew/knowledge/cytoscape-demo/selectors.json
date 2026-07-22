@@ -1,0 +1,39 @@
+{
+  "app": "cytoscape-demo",
+  "base_url": "http://127.0.0.1:8123",
+  "updated": "2026-07-22",
+  "selectors": {
+    "nodes.b": {
+      "selector": "scene:cytoscape/label=Node B",
+      "tier": "scene",
+      "page": "/cytoscape.html",
+      "reason": "Cytoscape node by label",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "cytoscape",
+        "instance": "window.__cy",
+        "by": "label",
+        "value": "Node B"
+      }
+    },
+    "nodes.c": {
+      "selector": "scene:cytoscape/label=Node C",
+      "tier": "scene",
+      "page": "/cytoscape.html",
+      "reason": "Cytoscape node by label",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "cytoscape",
+        "instance": "window.__cy",
+        "by": "label",
+        "value": "Node C"
+      }
+    }
+  }
+}

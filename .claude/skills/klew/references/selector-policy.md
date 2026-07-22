@@ -53,10 +53,14 @@ every scene entry for it works. Adapters shipped today:
 | `chartjs` | Chart.js (2D) | `label` (category); `dataset` opt | `window.__chart` |
 | `fabric` | Fabric.js (2D) | object property, e.g. `name` | `window.__fabric` |
 | `pixi` | PixiJS (WebGL) | display `label` (v8) | `window.__PIXI_APP__` |
+| `konva` | Konva (2D) | `name` / `id` / attr | `window.__konva` |
+| `echarts` | ECharts (2D) | `name` (category); `series` opt | `window.__echart` |
+| `cytoscape` | Cytoscape.js (2D graph) | `id` or data field (`label`) | `window.__cy` |
 
 Acting is `eval` (compute the point via the app's own transform — Sigma's
-`graphToViewport`, Chart.js element pixels, Fabric's `viewportTransform`, Pixi's
-`getGlobalPosition` — never a hardcoded pixel) + a real
+`graphToViewport`, Chart.js/ECharts element pixels, Fabric's `viewportTransform`,
+Pixi's `getGlobalPosition`, Konva's `getClientRect`, Cytoscape's
+`renderedPosition` — never a hardcoded pixel) + a real
 `mousemove`/`mousedown`/`mouseup` click, so the engine's own hit-testing fires:
 
 ```bash

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ECharts — scene target</title>
+  <script src="./vendor/echarts.min.js"></script>
+  <style>
+    html,body{margin:0;font-family:system-ui,sans-serif}
+    #chart{width:640px;height:420px}
+    #panel{padding:8px 12px;background:#f3f4f6;border-top:1px solid #d1d5db}
+    #selected b{color:#2563eb}
+  </style>
+</head>
+<body>
+  <div id="chart"></div>
+  <div id="panel"><span id="selected" data-test="selected-node">Selected: <b>none</b></span></div>
+  <script>
+    const selEl = document.querySelector('#selected b');
+    function select(name){ selEl.textContent = name; window.__lastSelected = name; }
+
+    const chart = echarts.init(document.getElementById('chart'));
+    chart.setOption({
+      animation: false,
+      xAxis: { type: 'category', data: ['Jan', 'Feb', 'Mar', 'Apr', 'May'] },
+      yAxis: { type: 'value' },
+      series: [{ type: 'bar', data: [12, 19, 7, 15, 22],
+        itemStyle: { color: '#2563eb' } }],
+    });
+    chart.on('click', (p) => select(p.name));   // real ECharts hit-testing
+
+    window.__echart = chart;
+    requestAnimationFrame(() => { window.__sceneReady = true; });
+  </script>
+</body>
+</html>

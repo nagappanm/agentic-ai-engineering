@@ -9,6 +9,11 @@ instance so a scene entry can address a shape by its logical identity.
 | `chartjs.html` | Chart.js 4 (2D) | bars | category `label` | `window.__chart` |
 | `fabric.html` | Fabric.js 7 (2D) | rects | object `name` | `window.__fabric` |
 | `pixi.html` | PixiJS 8 (WebGL) | graphics | display `label` | `window.__PIXI_APP__` |
+| `konva.html` | Konva 10 (2D) | rects | shape `name` | `window.__konva` |
+| `echarts.html` | ECharts 6 (2D) | bars | category `name` | `window.__echart` |
+| `cytoscape.html` | Cytoscape 3 (2D) | graph nodes | node `label` | `window.__cy` |
+
+(Sigma.js — the WebGL graph case — lives in the sibling `e2e/sigma`.)
 
 Each reflects the clicked shape's identity into `#selected [data-test="selected-node"]`.
 Libraries are vendored under `vendor/` (offline, no CDN).

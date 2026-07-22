@@ -160,12 +160,118 @@ def _pixi_count(instance: str, scene: dict) -> str:
   return c; }}"""
 
 
+# --- Konva (2D canvas) --------------------------------------------------------
+# Identity via node.name()/id()/getAttr(by); point via getClientRect() centre.
+
+_KONVA_FIND = (
+    "const arr = s.find('Shape'); "
+    "const list = arr.toArray ? arr.toArray() : Array.from(arr); "
+    "const key = %(by)s; "
+    "const get = key === 'name' ? (n) => n.name() : key === 'id' ? (n) => n.id() "
+    ": (n) => n.getAttr(key); "
+)
+
+
+def _konva_point(instance: str, scene: dict) -> str:
+    return (
+        "() => {\n"
+        "  const s = %(inst)s;\n"
+        "  if (!s) throw new Error('scene/konva: instance not found');\n"
+        "  " + _KONVA_FIND + "\n"
+        "  const node = list.find(n => String(get(n)).toLowerCase() === %(val)s.toLowerCase());\n"
+        "  if (!node) throw new Error('scene/konva: no ' + key + '=' + %(val)s);\n"
+        "  const box = node.getClientRect();\n"
+        "  const r = s.container().getBoundingClientRect();\n"
+        "  const pt = { x: Math.round(r.left + box.x + box.width / 2),\n"
+        "               y: Math.round(r.top + box.y + box.height / 2) };\n"
+        "  window.__ksel = pt; return pt;\n"
+        "}"
+    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+
+
+def _konva_count(instance: str, scene: dict) -> str:
+    return (
+        "() => { const s = %(inst)s; if (!s) return 0; " + _KONVA_FIND
+        + "return list.filter(n => String(get(n)).toLowerCase() === %(val)s.toLowerCase()).length; }"
+    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+
+
+# --- ECharts (2D canvas) ------------------------------------------------------
+# Category mark: find the index on the category axis, project to pixels with the
+# instance's own convertToPixel; click the bar mid-height so the hit lands.
+
+def _echarts_point(instance: str, scene: dict) -> str:
+    si = int(scene.get("series", 0))
+    return (
+        "() => {\n"
+        "  const c = %(inst)s;\n"
+        "  if (!c) throw new Error('scene/echarts: instance not found');\n"
+        "  const o = c.getOption();\n"
+        "  const cats = (o.xAxis && o.xAxis[0] && o.xAxis[0].data) || [];\n"
+        "  const i = cats.findIndex(v => String(v).toLowerCase() === %(val)s.toLowerCase());\n"
+        "  if (i < 0) throw new Error('scene/echarts: no category ' + %(val)s);\n"
+        "  const val = o.series[%(si)d].data[i];\n"
+        "  const p = c.convertToPixel({ seriesIndex: %(si)d }, [i, val]);\n"
+        "  const base = c.convertToPixel({ seriesIndex: %(si)d }, [i, 0]);\n"
+        "  const y = base ? (p[1] + base[1]) / 2 : p[1];\n"
+        "  const r = c.getDom().getBoundingClientRect();\n"
+        "  const pt = { x: Math.round(r.left + p[0]), y: Math.round(r.top + y) };\n"
+        "  window.__ksel = pt; return pt;\n"
+        "}"
+    ) % {"inst": instance, "val": _js(scene["value"]), "si": si}
+
+
+def _echarts_count(instance: str, scene: dict) -> str:
+    return (
+        "() => { const c = %(inst)s; if (!c) return 0; const o = c.getOption(); "
+        "const cats = (o.xAxis && o.xAxis[0] && o.xAxis[0].data) || []; "
+        "return cats.filter(v => String(v).toLowerCase() === %(val)s.toLowerCase()).length; }"
+    ) % {"inst": instance, "val": _js(scene["value"])}
+
+
+# --- Cytoscape.js (2D canvas graph) -------------------------------------------
+# Identity by id (getElementById) or any data field; point via renderedPosition
+# (already in screen pixels, pan/zoom-aware).
+
+_CY_FIND = (
+    "const by = %(by)s, val = %(val)s; "
+    "const node = by === 'id' ? cy.getElementById(val) "
+    ": cy.nodes().filter(n => String(n.data(by)).toLowerCase() === val.toLowerCase())[0]; "
+)
+
+
+def _cytoscape_point(instance: str, scene: dict) -> str:
+    return (
+        "() => {\n"
+        "  const cy = %(inst)s;\n"
+        "  if (!cy) throw new Error('scene/cytoscape: instance not found');\n"
+        "  " + _CY_FIND + "\n"
+        "  if (!node || node.length === 0) throw new Error('scene/cytoscape: no ' + by + '=' + val);\n"
+        "  const rp = node.renderedPosition();\n"
+        "  const r = cy.container().getBoundingClientRect();\n"
+        "  const pt = { x: Math.round(r.left + rp.x), y: Math.round(r.top + rp.y) };\n"
+        "  window.__ksel = pt; return pt;\n"
+        "}"
+    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+
+
+def _cytoscape_count(instance: str, scene: dict) -> str:
+    return (
+        "() => { const cy = %(inst)s; if (!cy) return 0; " + _CY_FIND
+        + "return by === 'id' ? (node && node.length ? 1 : 0) "
+        ": cy.nodes().filter(n => String(n.data(by)).toLowerCase() === val.toLowerCase()).length; }"
+    ) % {"inst": instance, "by": _js(scene["by"]), "val": _js(scene["value"])}
+
+
 # engine name -> _Engine(default instance, point builder, count builder)
 _ENGINES: dict[str, _Engine] = {
-    "sigma":   _Engine("window.__sigma",      _sigma_point,   _sigma_count),
-    "chartjs": _Engine("window.__chart",      _chartjs_point, _chartjs_count),
-    "fabric":  _Engine("window.__fabric",     _fabric_point,  _fabric_count),
-    "pixi":    _Engine("window.__PIXI_APP__", _pixi_point,    _pixi_count),
+    "sigma":     _Engine("window.__sigma",      _sigma_point,     _sigma_count),
+    "chartjs":   _Engine("window.__chart",      _chartjs_point,   _chartjs_count),
+    "fabric":    _Engine("window.__fabric",     _fabric_point,    _fabric_count),
+    "pixi":      _Engine("window.__PIXI_APP__", _pixi_point,      _pixi_count),
+    "konva":     _Engine("window.__konva",      _konva_point,     _konva_count),
+    "echarts":   _Engine("window.__echart",     _echarts_point,   _echarts_count),
+    "cytoscape": _Engine("window.__cy",         _cytoscape_point, _cytoscape_count),
 }
 
 

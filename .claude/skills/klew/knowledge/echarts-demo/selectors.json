@@ -1,0 +1,39 @@
+{
+  "app": "echarts-demo",
+  "base_url": "http://127.0.0.1:8123",
+  "updated": "2026-07-22",
+  "selectors": {
+    "bars.feb": {
+      "selector": "scene:echarts/name=Feb",
+      "tier": "scene",
+      "page": "/echarts.html",
+      "reason": "ECharts bar by category",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "echarts",
+        "instance": "window.__echart",
+        "by": "name",
+        "value": "Feb"
+      }
+    },
+    "bars.apr": {
+      "selector": "scene:echarts/name=Apr",
+      "tier": "scene",
+      "page": "/echarts.html",
+      "reason": "ECharts bar by category",
+      "status": "approved",
+      "verified": "2026-07-22",
+      "confidence": 0.7,
+      "a11y_flag": true,
+      "scene": {
+        "engine": "echarts",
+        "instance": "window.__echart",
+        "by": "name",
+        "value": "Apr"
+      }
+    }
+  }
+}

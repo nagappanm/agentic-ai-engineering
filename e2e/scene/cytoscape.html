@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Cytoscape — scene target</title>
+  <script src="./vendor/cytoscape.min.js"></script>
+  <style>
+    html,body{margin:0;font-family:system-ui,sans-serif}
+    #cy{width:640px;height:420px;display:block}
+    #panel{padding:8px 12px;background:#f3f4f6;border-top:1px solid #d1d5db}
+    #selected b{color:#2563eb}
+  </style>
+</head>
+<body>
+  <div id="cy"></div>
+  <div id="panel"><span id="selected" data-test="selected-node">Selected: <b>none</b></span></div>
+  <script>
+    const selEl = document.querySelector('#selected b');
+    function select(label){ selEl.textContent = label; window.__lastSelected = label; }
+
+    const cy = cytoscape({
+      container: document.getElementById('cy'),
+      elements: [
+        { data: { id: 'a', label: 'Node A' } },
+        { data: { id: 'b', label: 'Node B' } },
+        { data: { id: 'c', label: 'Node C' } },
+        { data: { source: 'a', target: 'b' } },
+        { data: { source: 'a', target: 'c' } },
+      ],
+      layout: { name: 'grid', rows: 1 },
+      style: [{ selector: 'node', style: {
+        label: 'data(label)', 'background-color': '#2563eb', width: 44, height: 44 } }],
+      userZoomingEnabled: false, userPanningEnabled: false,
+    });
+    cy.on('tap', 'node', (evt) => select(evt.target.data('label')));  // real hit-testing
+
+    window.__cy = cy;
+    requestAnimationFrame(() => { window.__sceneReady = true; });
+  </script>
+</body>
+</html>

@@ -102,8 +102,8 @@ Prefer, in order:
 4. **CSS/structural** — `"#main > button.submit"` — **last resort only**, and
    record *why* nothing better was available.
 5. **Scene (canvas/WebGL)** — for targets drawn inside a `<canvas>` that have **no
-   DOM element** (Sigma.js, Chart.js, Fabric.js, PixiJS — adapters in
-   `scripts/scene_adapters.py`). Cache the shape's logical identity
+   DOM element** (Sigma.js, Chart.js, Fabric.js, PixiJS, Konva, ECharts,
+   Cytoscape — adapters in `scripts/scene_adapters.py`). Cache the shape's logical identity
    (`scene:sigma/label=Alice`) and act via `eval` + `mouse*` through the app's own
    scene model — never a hardcoded pixel. Use only when tiers 1–4 find no DOM
    element (prefer any HTML overlay/search control the app exposes). See the
