@@ -1,0 +1,85 @@
+{
+  "requirements": {
+    "TMVC-1": {
+      "hash": "sha256:a55eba5951765354",
+      "tests": [
+        "todomvc-journeys.spec.ts",
+        "todomvc.spec.ts"
+      ]
+    },
+    "TMVC-10": {
+      "hash": "sha256:fb9ae1e22b741293",
+      "tests": [
+        "todomvc-journeys.spec.ts"
+      ]
+    },
+    "TMVC-11": {
+      "hash": "sha256:6e86b8347a636300",
+      "tests": [
+        "todomvc-journeys.spec.ts"
+      ]
+    },
+    "TMVC-12": {
+      "hash": "sha256:a9cc22210db5e68b",
+      "tests": [
+        "todomvc-journeys.spec.ts"
+      ]
+    },
+    "TMVC-13": {
+      "hash": "sha256:a628e04f0bfc9980",
+      "tests": [
+        "todomvc-journeys.spec.ts"
+      ]
+    },
+    "TMVC-2": {
+      "hash": "sha256:4b9d76573e8b779c",
+      "tests": [
+        "todomvc-journeys.spec.ts",
+        "todomvc.spec.ts"
+      ]
+    },
+    "TMVC-3": {
+      "hash": "sha256:41b08aac7acbfd3d",
+      "tests": [
+        "todomvc-journeys.spec.ts",
+        "todomvc.spec.ts"
+      ]
+    },
+    "TMVC-4": {
+      "hash": "sha256:b2eb9d27b361da9a",
+      "tests": [
+        "todomvc-journeys.spec.ts"
+      ]
+    },
+    "TMVC-5": {
+      "hash": "sha256:7b86a37edb3aabbe",
+      "tests": [
+        "todomvc-journeys.spec.ts"
+      ]
+    },
+    "TMVC-6": {
+      "hash": "sha256:a6f6a4f71dd06e5d",
+      "tests": [
+        "todomvc-journeys.spec.ts"
+      ]
+    },
+    "TMVC-7": {
+      "hash": "sha256:54d1471ab4345bbd",
+      "tests": [
+        "todomvc-journeys.spec.ts"
+      ]
+    },
+    "TMVC-8": {
+      "hash": "sha256:8dbad03dc73e86c7",
+      "tests": [
+        "todomvc-journeys.spec.ts"
+      ]
+    },
+    "TMVC-9": {
+      "hash": "sha256:8bf7d900bc6f555f",
+      "tests": [
+        "todomvc-journeys.spec.ts"
+      ]
+    }
+  }
+}

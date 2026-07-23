@@ -127,6 +127,8 @@ def decide(
     justified: bool | None,
     config: dict,
     knowledge_stale: bool = False,
+    flaky_ids: set | list | None = None,
+    reqdrift_stale: bool = False,
 ) -> dict:
     """Pure traffic-light decision. Returns {light, reasons, ...}. First match wins.
 
@@ -135,17 +137,43 @@ def decide(
     never RED, and per `knowledge_drift` config it can be downgraded to a
     non-gating informational note (still surfaced, never silent). See the
     knowledge-durability plan.
+
+    `flaky_ids` (from flakedoctor's `quarantine` list) are journeys whose failures
+    are intermittent, not regressions: a journey that fails THIS run but is flaky is
+    NOT counted as a red failure (no bug filed) — it is quarantined and surfaced as
+    an ORANGE note instead. Only genuine (non-flaky) failures still gate red.
+
+    `reqdrift_stale` (a requirement's text drifted vs the committed baseline) is,
+    like knowledge drift, a review signal — GREEN→ORANGE, never RED.
     """
     green_score = config.get("green_score", 85)
     knowledge_drift = config.get("knowledge_drift", "orange")  # "orange" gates | "info" surfaces
     knowledge_msg = "knowledge note stale vs cache — review the app notes"
+    drift_msg = "requirement(s) drifted vs baseline — re-review the tracing tests"
+    flaky_ids = set(flaky_ids or [])
     info_note = [knowledge_msg] if (knowledge_stale and knowledge_drift != "orange") else []
     reasons: list[str] = []
 
-    failed = [j for j in journeys if j["status"] != "passed"]
+    # A failure of a known-flaky journey is quarantined, not a red regression.
+    failed = [j for j in journeys if j["status"] != "passed" and j.get("id") not in flaky_ids]
+    quarantined = [j for j in journeys if j["status"] != "passed" and j.get("id") in flaky_ids]
+    quarantine_msg = (
+        f"{len(quarantined)} flaky journey(s) quarantined (no bug filed): "
+        f"{', '.join(j['id'] for j in quarantined)}" if quarantined else None
+    )
     s = summarize_testguard(tg)
 
-    # ---- RED ---- (knowledge drift never causes red; surfaced as a note if present)
+    def _notes():  # side signals surfaced on any verdict, never gating red
+        n = []
+        if knowledge_stale:
+            n.append(knowledge_msg)
+        if reqdrift_stale:
+            n.append(drift_msg)
+        if quarantine_msg:
+            n.append(quarantine_msg)
+        return n
+
+    # ---- RED ---- (knowledge/req drift & flaky quarantine never cause red; noted)
     if failed:
         reasons.append(f"{len(failed)} journey(s) failed: {', '.join(j['id'] for j in failed)}")
     if s["high"]:
@@ -155,15 +183,18 @@ def decide(
     if not s["passed"] or s["meanScore"] < s["threshold"]:
         reasons.append(f"testguard below threshold (meanScore {s['meanScore']} < {s['threshold']})")
     if reasons:
-        notes = [knowledge_msg] if knowledge_stale else []
         return {"light": "red", "reasons": reasons, "failed_journeys": failed,
-                "testguard": s, "notes": notes}
+                "quarantined": [j["id"] for j in quarantined], "testguard": s, "notes": _notes()}
 
     # ---- ORANGE ----
     if cache_update_needed and not justified:
         reasons.append(
             "selector-cache delta UPDATE NEEDED but not justified by the PR + requirements"
         )
+    if quarantine_msg:
+        reasons.append(quarantine_msg)
+    if reqdrift_stale:
+        reasons.append(drift_msg)
     if s["medium"]:
         reasons.append(f"{len(s['medium'])} medium-severity testguard finding(s)")
     if s["uncovered"]:
@@ -173,7 +204,8 @@ def decide(
     if knowledge_stale and knowledge_drift == "orange":
         reasons.append(knowledge_msg)
     if reasons:
-        return {"light": "orange", "reasons": reasons, "testguard": s, "notes": info_note}
+        return {"light": "orange", "reasons": reasons, "testguard": s,
+                "quarantined": [j["id"] for j in quarantined], "notes": info_note}
 
     # ---- GREEN ---- (knowledge_stale here only in "info" mode; surfaced as a note)
     note = "cache up to date" if not cache_update_needed else "cache delta justified"
@@ -201,6 +233,14 @@ def main() -> None:
     ap.add_argument(
         "--knowledge-status", default="",
         help="the line printed by knowledge_check.py (KNOWLEDGE UP TO DATE / UPDATE NEEDED)",
+    )
+    ap.add_argument(
+        "--flakedoctor", metavar="JSON",
+        help="flakedoctor --json output; its 'quarantine' list downgrades flaky failures",
+    )
+    ap.add_argument(
+        "--reqdrift", metavar="JSON",
+        help="reqdrift --json output; drifted/removed-with-tests raises an orange review signal",
     )
     ap.add_argument("--config", default=None)
     ap.add_argument("--json", action="store_true", help="emit verdict JSON on stdout")
@@ -243,12 +283,25 @@ def main() -> None:
     justified = None if args.justified is None else args.justified == "true"
     knowledge_stale = "UPDATE NEEDED" in args.knowledge_status.upper()
 
-    verdict = decide(journeys, tg, cache_update_needed, justified, config, knowledge_stale)
+    # flakedoctor: journeys it classifies flaky are quarantined (failures ≠ regressions).
+    flake = read_report(args.flakedoctor) if args.flakedoctor else None
+    flaky_ids = set(flake.get("quarantine", [])) if flake else set()
+    # reqdrift: a drifted or removed-with-tests requirement is an orange review signal.
+    drift = read_report(args.reqdrift) if args.reqdrift else None
+    reqdrift_stale = bool(
+        drift and (drift.get("drifted") or [r for r in drift.get("removed", []) if r.get("tests")])
+    )
+
+    verdict = decide(journeys, tg, cache_update_needed, justified, config,
+                     knowledge_stale, flaky_ids=flaky_ids, reqdrift_stale=reqdrift_stale)
     verdict["summary"] = {
         "journeys": len(journeys),
         "passed": sum(1 for j in journeys if j["status"] == "passed"),
         "cache_update_needed": cache_update_needed,
         "justified": justified,
+        "quarantined": sorted(flaky_ids & {j["id"] for j in journeys
+                                           if j["status"] != "passed"}),
+        "reqdrift_stale": reqdrift_stale,
     }
 
     if args.emit_bugs and verdict["light"] == "red":

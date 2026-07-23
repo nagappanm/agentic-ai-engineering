@@ -24,6 +24,16 @@ data/
 *.sqlite3
 .chroma/
 
+# pr_gate CI run artifacts + flakedoctor run-history window (regenerated per run)
+.ci/history/
+/results.json
+/testguard.json
+/verdict.json
+/flake.json
+/drift.json
+/a11y.json
+/qe-board.html
+
 # Scratch LinkedIn carousel assets (not part of the package)
 linkedin_assets/
 

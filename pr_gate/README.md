@@ -19,12 +19,19 @@ journeys (Output ① PASS/FAIL) + testguard grade + cache dry-run (Output ②) +
 
 | Light | When |
 |---|---|
-| 🔴 red | a journey failed · any **high**-severity testguard finding · hallucinated selector (TG100) · `meanScore < threshold` |
-| 🟠 orange | cache delta **UPDATE NEEDED but not justified** · **medium** findings · uncovered requirements · **knowledge note stale vs cache** · `threshold ≤ meanScore < green_score` |
+| 🔴 red | a **non-flaky** journey failed · any **high**-severity testguard finding · hallucinated selector (TG100) · `meanScore < threshold` |
+| 🟠 orange | cache delta **UPDATE NEEDED but not justified** · **medium** findings · uncovered requirements · **knowledge note stale** · **flaky journey quarantined** · **requirement drifted vs baseline** · `threshold ≤ meanScore < green_score` |
 | 🟢 green | all journeys pass · testguard clean (`≥ green_score`, no high/medium) · cache up to date **or** delta justified |
 
 Exit codes encode the light for CI: **0 green / 10 orange / 20 red**. Bands live
 in `pr-gate.config.json` (`threshold=70`, `green_score=85`).
+
+**Cross-run signals** (`--flakedoctor flake.json --reqdrift drift.json`): a
+failing journey that flakedoctor classifies **flaky** is *quarantined* (🟠, no bug
+filed) instead of red — only genuine regressions gate red. A **drifted** or
+**removed-with-tests** requirement (vs the committed `reqdrift.json` baseline) is a
+🟠 review signal, never red. History for flakedoctor lives in `.ci/history/`
+(`run_history.py`), carried across runs by the Actions cache.
 
 **Knowledge-note drift** (`--knowledge-status`, from `knowledge_check.py`): a stale
 app knowledge note is a *documentation-freshness* signal — it can push green→orange
@@ -40,6 +47,7 @@ never silent); omit the input entirely to opt out.
 | `flakedoctor.py` | cross-run flakiness triage — regression (file bug) vs flaky (quarantine) |
 | `reqdrift.py` | requirement-drift watcher — flag tests whose requirement text changed |
 | `qe_board.py` | aggregate every signal into one GO/NO-GO board + ranked next moves |
+| `run_history.py` | rolling window of recent `results.json` (the store flakedoctor reads) |
 | `justify.py` | `judge(ui_touched, yilsf_result)` — is a cache delta warranted by the PR + requirement? |
 | `bug_report.py` | `format_bug()` — YAML-front-matter + markdown repro an LLM can parse |
 | `tracker.py` | file the bug: **Jira REST** / **GitHub `gh`** / `--dry-run`; dedup + link-to-story |
