@@ -8,11 +8,15 @@ the same seam Module 1 uses for ``LLMClient(client=...)``.
 from __future__ import annotations
 
 from documind.speed_to_lead import (
+    ConsoleNotifier,
     Lead,
     LeadResponse,
+    NotifyResult,
     draft_reply,
+    notify,
     respond_to_lead,
     score_lead,
+    should_notify,
     triage,
 )
 
@@ -147,3 +151,84 @@ def test_lead_from_dict_parses_webhook_payload() -> None:
     assert lead.source == "referral"  # normalised to lower-case
     assert lead.phone == "+1-555"
     assert lead.email is None
+
+
+# --- notify (pluggable transport, dry-run by default) ----------------------- #
+
+
+class _SpyNotifier:
+    """Records every send instead of touching the network."""
+
+    def __init__(self) -> None:
+        self.sends: list[dict[str, str]] = []
+
+    def send(self, *, channel: str, recipient: str, body: str) -> str:
+        self.sends.append({"channel": channel, "recipient": recipient, "body": body})
+        return "spy-ok"
+
+
+def _resp(lead: Lead) -> LeadResponse:
+    # Draft with a fake client so no network is touched.
+    return respond_to_lead(lead, client=_FakeClient())
+
+
+def test_notify_sends_hot_lead_over_phone() -> None:
+    spy = _SpyNotifier()
+    result = notify(_resp(_hot_lead()), notifier=spy)
+    assert isinstance(result, NotifyResult)
+    assert result.sent is True
+    assert result.channel == "phone"
+    assert result.recipient == "+1-555-0101"
+    assert spy.sends and spy.sends[0]["channel"] == "phone"
+    assert spy.sends[0]["recipient"] == "+1-555-0101"
+
+
+def test_notify_holds_disqualified_lead_by_default() -> None:
+    lead = Lead(name="A", message="just looking, no budget, student", source="cold")
+    spy = _SpyNotifier()
+    result = notify(_resp(lead), notifier=spy)
+    assert result.sent is False
+    assert "disqualified" in result.detail
+    assert spy.sends == []  # nothing was dispatched
+
+
+def test_notify_force_overrides_disqualify_policy() -> None:
+    lead = Lead(
+        name="A",
+        message="just looking, no budget",
+        source="cold",
+        email="a@acme.io",
+    )
+    spy = _SpyNotifier()
+    result = notify(_resp(lead), notifier=spy, force=True)
+    assert result.sent is True
+    assert spy.sends  # forced through despite disqualify policy
+
+
+def test_notify_reports_missing_recipient() -> None:
+    # Warm/hot enough to want to send, but no phone and no email on file.
+    lead = Lead(name="Jo", message="pricing? ready to buy today", source="referral")
+    result = notify(_resp(lead), notifier=_SpyNotifier())
+    assert result.sent is False
+    assert "no " in result.detail  # e.g. "no phone on file" / "no email on file"
+
+
+def test_should_notify_policy() -> None:
+    assert should_notify(triage(_hot_lead())) is True
+    assert should_notify(triage(Lead(name="A", message="just looking", source="cold"))) is False
+
+
+def test_console_notifier_records_without_echo(capsys) -> None:
+    notifier = ConsoleNotifier(echo=False)
+    detail = notifier.send(channel="email", recipient="x@y.com", body="hi")
+    assert detail.startswith("dry-run")
+    assert notifier.sent == [{"channel": "email", "recipient": "x@y.com", "body": "hi"}]
+    assert capsys.readouterr().err == ""  # echo off → nothing printed
+
+
+def test_notify_result_to_dict_roundtrips() -> None:
+    result = notify(_resp(_hot_lead()), notifier=_SpyNotifier())
+    d = result.to_dict()
+    assert d["sent"] is True
+    assert d["channel"] == "phone"
+    assert set(d) == {"sent", "channel", "recipient", "detail"}

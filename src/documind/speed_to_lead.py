@@ -27,7 +27,7 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 # --------------------------------------------------------------------------- #
 # The lead                                                                     #
@@ -321,6 +321,100 @@ def respond_to_lead(lead: Lead, *, client: Any | None = None) -> LeadResponse:
 
 
 # --------------------------------------------------------------------------- #
+# Notify — actually deliver the drafted reply. This is the "action" step that   #
+# turns a draft into a sent message: the whole point of speed-to-lead is that    #
+# the reply goes out in seconds. Delivery is a pluggable transport so the real   #
+# provider (Twilio SMS, a voice dialer, SendGrid email…) is a one-method swap,    #
+# and the safe default only simulates sending — outward messages must never fire  #
+# by accident.                                                                    #
+# --------------------------------------------------------------------------- #
+
+
+class Notifier(Protocol):
+    """A transport that can deliver a message. Swap in a real provider here.
+
+    Any object with this ``send`` shape works — a Twilio client wrapper, an
+    email API, or the built-in :class:`ConsoleNotifier` used for safe dry runs.
+    """
+
+    def send(self, *, channel: str, recipient: str, body: str) -> str:
+        """Deliver ``body`` to ``recipient`` over ``channel``; return a detail string."""
+        ...
+
+
+@dataclass
+class ConsoleNotifier:
+    """Default, safe transport: records the message instead of really sending it.
+
+    Every "send" is appended to :attr:`sent` (so tests and logs can inspect it)
+    and echoed to ``stderr`` so it never corrupts JSON on stdout. Nothing leaves
+    the machine — swap in a real :class:`Notifier` when you actually want to send.
+    """
+
+    echo: bool = True
+    sent: list[dict[str, str]] = field(default_factory=list)
+
+    def send(self, *, channel: str, recipient: str, body: str) -> str:
+        record = {"channel": channel, "recipient": recipient, "body": body}
+        self.sent.append(record)
+        if self.echo:
+            print(f"[dry-run · {channel} → {recipient}]\n{body}\n", file=sys.stderr)
+        return "dry-run (not actually sent)"
+
+
+@dataclass(frozen=True)
+class NotifyResult:
+    """Outcome of a delivery attempt — recorded whether or not it went out."""
+
+    sent: bool
+    channel: str
+    recipient: str | None
+    detail: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "sent": self.sent,
+            "channel": self.channel,
+            "recipient": self.recipient,
+            "detail": self.detail,
+        }
+
+
+def should_notify(decision: Triage) -> bool:
+    """Policy: auto-send for every tier except a disqualified lead.
+
+    Kept as an explicit, readable rule (same spirit as the scoring core) so the
+    decision to *not* message someone is intentional, not an accident.
+    """
+    return decision.action != "disqualify"
+
+
+def notify(
+    response: LeadResponse,
+    *,
+    notifier: Notifier | None = None,
+    force: bool = False,
+) -> NotifyResult:
+    """Deliver a lead's drafted reply over the channel triage chose.
+
+    Defaults to a :class:`ConsoleNotifier` dry run — nothing is actually sent
+    unless you pass a real transport. Disqualified leads are held back unless
+    ``force=True``, and a missing phone/email is reported rather than raising.
+    """
+    decision = response.triage
+    if not force and not should_notify(decision):
+        return NotifyResult(False, decision.channel, None, "held: lead disqualified")
+
+    recipient = response.lead.phone if decision.channel == "phone" else response.lead.email
+    if not recipient:
+        return NotifyResult(False, decision.channel, None, f"no {decision.channel} on file")
+
+    notifier = notifier or ConsoleNotifier()
+    detail = notifier.send(channel=decision.channel, recipient=recipient, body=response.reply)
+    return NotifyResult(True, decision.channel, recipient, detail)
+
+
+# --------------------------------------------------------------------------- #
 # CLI                                                                          #
 # --------------------------------------------------------------------------- #
 
@@ -352,13 +446,16 @@ _SAMPLE_LEADS = [
 ]
 
 
-def _print_response(resp: LeadResponse) -> None:
+def _print_response(resp: LeadResponse, delivery: NotifyResult | None = None) -> None:
     t = resp.triage
     print(f"\n{_RULE}\n{resp.lead.name}  —  via {resp.lead.source}\n{_RULE}")
     print(f'Message : "{resp.lead.message}"')
     print(f"Score   : {t.score}/100  →  {t.tier.upper()}  →  {t.action}  (via {t.channel})")
     print(f"Why     : {'; '.join(t.reasons)}")
     print(f"Reply   :\n{resp.reply}")
+    if delivery is not None:
+        status = f"→ {delivery.recipient}" if delivery.sent else "not sent"
+        print(f"Notify  : {status}  ({delivery.detail})")
 
 
 def _cli_client() -> Any:
@@ -382,12 +479,14 @@ def _demo(client: Any | None = None) -> None:
     if client is None:
         client = _cli_client()
 
-    print("Speed-to-lead agent — three inbound leads, scored and answered instantly:")
+    print("Speed-to-lead agent — three inbound leads, scored, answered, and dispatched:")
+    notifier = ConsoleNotifier(echo=False)  # dry run; body already shown as "Reply"
     for lead in _SAMPLE_LEADS:
-        _print_response(respond_to_lead(lead, client=client))
+        resp = respond_to_lead(lead, client=client)
+        _print_response(resp, notify(resp, notifier=notifier))
     print(
-        f"\n{_RULE}\nDeterministic triage decides the action; the LLM only writes the "
-        f"words.\n{_RULE}"
+        f"\n{_RULE}\nTriage decides the action, the LLM writes the words, notify sends "
+        f"them.\n(Dry run — plug in a real Notifier to actually deliver.)\n{_RULE}"
     )
 
 
@@ -405,6 +504,9 @@ def main(argv: list[str] | None = None) -> int:
 
         echo '{"name":"Sam","message":"pricing?","phone":"+1-555","source":"referral"}' \\
             | python -m documind.speed_to_lead
+
+    Add ``--send`` to also dispatch the drafted reply (a safe dry run via the
+    built-in ConsoleNotifier; swap in a real transport to actually deliver).
     """
     argv = sys.argv[1:] if argv is None else argv
 
@@ -412,9 +514,13 @@ def main(argv: list[str] | None = None) -> int:
         print(main.__doc__)
         return 0
 
-    # ``--demo`` is explicit; with no args we run the demo *unless* a lead is
-    # being piped in (stdin is not a terminal), in which case we read that JSON.
-    if argv[:1] == ["--demo"] or (not argv and sys.stdin.isatty()):
+    send = "--send" in argv
+    flags = {"--send", "--demo"}
+    positional = [a for a in argv if a not in flags]
+
+    # ``--demo`` is explicit; with no positional args we run the demo *unless* a
+    # lead is being piped in (stdin is not a terminal), in which case read JSON.
+    if "--demo" in argv or (not positional and sys.stdin.isatty()):
         _demo()
         return 0
 
@@ -429,7 +535,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     resp = respond_to_lead(Lead.from_dict(payload), client=_cli_client())
-    print(json.dumps(resp.to_dict(), indent=2))
+    out = resp.to_dict()
+    if send:
+        out["notify"] = notify(resp, notifier=ConsoleNotifier(echo=False)).to_dict()
+    print(json.dumps(out, indent=2))
     return 0
 
 
