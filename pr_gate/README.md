@@ -39,6 +39,7 @@ never silent); omit the input entirely to opt out.
 | `gate.py` | pure `decide()` + Playwright/testguard parsers + CLI |
 | `flakedoctor.py` | cross-run flakiness triage — regression (file bug) vs flaky (quarantine) |
 | `reqdrift.py` | requirement-drift watcher — flag tests whose requirement text changed |
+| `qe_board.py` | aggregate every signal into one GO/NO-GO board + ranked next moves |
 | `justify.py` | `judge(ui_touched, yilsf_result)` — is a cache delta warranted by the PR + requirement? |
 | `bug_report.py` | `format_bug()` — YAML-front-matter + markdown repro an LLM can parse |
 | `tracker.py` | file the bug: **Jira REST** / **GitHub `gh`** / `--dry-run`; dedup + link-to-story |
@@ -110,6 +111,32 @@ the convention testguard/pr_gate already use. Requirement text comes from
 a Jira reword trips it too. Exit `10` when a drifted/removed requirement still has
 tracing tests to re-review (gateable → 🟠 review), else `0`. The hash normalizes
 whitespace/case, so only real word changes count. Tests: `tests/test_reqdrift.py`.
+
+## One board (`qe_board.py`)
+
+Each tool answers one question and prints one report; nobody puts them on one
+surface. `qe_board` is that surface — it reads the tools' JSON, aggregates it into
+a single **GO / NO-GO** verdict and a **ranked list of next moves**, and renders a
+mission-control dashboard (a self-contained HTML file — no external assets, no LLM).
+
+```bash
+python pr_gate/flakedoctor.py --runs-dir .ci/history --json                 > flake.json
+python pr_gate/reqdrift.py --requirements e2e/requirements.txt \
+  --tests 'e2e/*.spec.ts' --baseline pr_gate/reqdrift.json --json           > drift.json
+python .claude/skills/klew/scripts/a11y_report.py --app todomvc --format json > a11y.json
+
+python pr_gate/qe_board.py --app todomvc --requirements e2e/requirements.txt \
+  --flakedoctor flake.json --reqdrift drift.json --a11y a11y.json --out qe-board.html
+#   NO-GO — wrote board to qe-board.html
+```
+
+Every signal input is optional — the board degrades gracefully if a tool wasn't
+run. The verdict rollup: **NO-GO** (a regression, an orphaned/removed requirement,
+or a serious a11y blocker), **HOLD** (flaky / drift / moderate a11y / uncovered —
+review, don't ship), **GO** (all clear). Exit code mirrors the gate: `0` GO / `10`
+HOLD / `20` NO-GO. The aggregation (`build_model`) is a pure function; the HTML
+shell lives in `qe_board_template.html` with `{{TOKENS}}` injected. `--json` emits
+the board model instead of HTML. Tests: `tests/test_qe_board.py`.
 
 MCP tools don't run inside a headless Action, so CI uses `gh` + Jira REST; an
 interactive Claude session can drive the same bug dict via the GitHub/Atlassian
