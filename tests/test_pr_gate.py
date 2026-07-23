@@ -102,6 +102,50 @@ def test_red_on_failed_journey():
     assert any("failed" in r for r in v["reasons"])
 
 
+def test_flaky_failure_is_quarantined_not_red():
+    # the only failing journey is flaky → no red, quarantined as an orange note.
+    js = _journeys(4) + [{"id": "TMVC-9", "title": "f", "status": "failed", "error": "x"}]
+    v = gate.decide(js, _tg(mean=100), cache_update_needed=False, justified=None,
+                    config=CONFIG, flaky_ids={"TMVC-9"})
+    assert v["light"] == "orange"
+    assert "TMVC-9" in v["quarantined"]
+    assert any("quarantined" in r for r in v["reasons"])
+
+
+def test_flaky_plus_real_failure_still_red():
+    # one flaky failure + one genuine failure → still red on the genuine one only.
+    js = _journeys(3) + [
+        {"id": "TMVC-9", "title": "flaky", "status": "failed", "error": "x"},
+        {"id": "TMVC-8", "title": "real", "status": "failed", "error": "x"},
+    ]
+    v = gate.decide(js, _tg(mean=100), cache_update_needed=False, justified=None,
+                    config=CONFIG, flaky_ids={"TMVC-9"})
+    assert v["light"] == "red"
+    assert [j["id"] for j in v["failed_journeys"]] == ["TMVC-8"]   # flaky excluded
+    assert v["quarantined"] == ["TMVC-9"]
+    assert any("quarantined" in n for n in v["notes"])             # surfaced on red too
+
+
+def test_reqdrift_stale_turns_green_to_orange():
+    v = gate.decide(_journeys(10), _tg(mean=100), cache_update_needed=False,
+                    justified=None, config=CONFIG, reqdrift_stale=True)
+    assert v["light"] == "orange"
+    assert any("drifted vs baseline" in r for r in v["reasons"])
+
+
+def test_reqdrift_stale_never_causes_red():
+    v = gate.decide(_journeys(10), _tg(mean=100), cache_update_needed=False,
+                    justified=None, config=CONFIG, reqdrift_stale=True)
+    assert v["light"] != "red"
+
+
+def test_reqdrift_stale_noted_on_a_real_red():
+    v = gate.decide(_journeys(9, 1), _tg(mean=100), cache_update_needed=False,
+                    justified=None, config=CONFIG, reqdrift_stale=True)
+    assert v["light"] == "red"
+    assert any("drifted vs baseline" in n for n in v.get("notes", []))
+
+
 def test_red_on_high_finding():
     v = gate.decide(
         _journeys(5), _tg(mean=90, high=1), cache_update_needed=False, justified=None, config=CONFIG

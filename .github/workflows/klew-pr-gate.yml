@@ -51,6 +51,16 @@ jobs:
           (cd testguard && npm ci || npm install)
           (cd e2e && npx playwright install --with-deps chromium)
 
+      # Rolling run-history for flakedoctor: restore the most recent window (via the
+      # restore-keys prefix), append this run below, and save a fresh entry at post-job.
+      - name: Restore run-history (flakedoctor window)
+        uses: actions/cache@v4
+        with:
+          path: .ci/history
+          key: klew-run-history-${{ github.run_id }}
+          restore-keys: |
+            klew-run-history-
+
       - name: Resolve requirements (Jira ticket → else fallback file)
         run: |
           python pr_gate/requirements_source.py \
@@ -99,6 +109,31 @@ jobs:
             --require-traceability --requirements /tmp/requirements.txt \
             --dynamic --base-url "$BASE_URL" > "$GITHUB_WORKSPACE/testguard.json" || true
 
+      - name: Cross-run flakiness + requirement drift (gate signals)
+        continue-on-error: true
+        run: |
+          APP=$(python -c "import json;print(json.load(open('pr_gate/pr-gate.config.json')).get('app_cache',''))")
+          # 1) record this run in the rolling window, then classify across it
+          python pr_gate/run_history.py --dir .ci/history --add results.json \
+            --sha "$GITHUB_SHA" --keep 10 || true
+          python pr_gate/flakedoctor.py --runs-dir .ci/history --glob 'run-*.json' --json \
+            > flake.json || echo '{}' > flake.json
+          # 2) requirement-text drift vs the committed baseline
+          if [ -f pr_gate/reqdrift.json ]; then
+            python pr_gate/reqdrift.py --requirements /tmp/requirements.txt \
+              --tests 'e2e/*.spec.ts' --baseline pr_gate/reqdrift.json --json \
+              > drift.json || echo '{}' > drift.json
+          else
+            echo '{}' > drift.json
+          fi
+          # 3) accessibility audit (optional; feeds the board)
+          if [ -n "$APP" ]; then
+            python .claude/skills/klew/scripts/a11y_report.py --app "$APP" --format json \
+              > a11y.json || echo '{}' > a11y.json
+          else
+            echo '{}' > a11y.json
+          fi
+
       - name: Cache-update? (does this PR change the selector cache?) + justify
         id: cache
         run: |
@@ -137,6 +172,7 @@ jobs:
             --cache-status "${{ steps.cache.outputs.status }}" \
             --justified "${{ steps.cache.outputs.justified }}" \
             --knowledge-status "${{ steps.knowledge.outputs.status }}" \
+            --flakedoctor flake.json --reqdrift drift.json \
             --emit-bugs /tmp/bugs --pr "$PR" --base-url "$BASE_URL" \
             --json > verdict.json
           code=$?
@@ -144,6 +180,17 @@ jobs:
           echo "light=$light" >> "$GITHUB_OUTPUT"
           echo "code=$code" >> "$GITHUB_OUTPUT"
           cat verdict.json
+
+      - name: Generate QE board (one console — verdict + next moves)
+        if: always()
+        continue-on-error: true
+        run: |
+          APP=$(python -c "import json;print(json.load(open('pr_gate/pr-gate.config.json')).get('app_cache','app'))")
+          python pr_gate/qe_board.py --app "${APP:-app}" \
+            --requirements /tmp/requirements.txt \
+            --flakedoctor flake.json --reqdrift drift.json --a11y a11y.json \
+            --branch "${{ github.head_ref || github.ref_name }}" --window "last 10 runs" \
+            --out qe-board.html || true
 
       - name: Upload artifacts
         if: always()
@@ -154,6 +201,10 @@ jobs:
             results.json
             testguard.json
             verdict.json
+            flake.json
+            drift.json
+            a11y.json
+            qe-board.html
             e2e/test-results/**
 
       - name: 🔴 RED — file bug(s) + fail

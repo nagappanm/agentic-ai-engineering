@@ -19,12 +19,19 @@ journeys (Output ① PASS/FAIL) + testguard grade + cache dry-run (Output ②) +
 
 | Light | When |
 |---|---|
-| 🔴 red | a journey failed · any **high**-severity testguard finding · hallucinated selector (TG100) · `meanScore < threshold` |
-| 🟠 orange | cache delta **UPDATE NEEDED but not justified** · **medium** findings · uncovered requirements · **knowledge note stale vs cache** · `threshold ≤ meanScore < green_score` |
+| 🔴 red | a **non-flaky** journey failed · any **high**-severity testguard finding · hallucinated selector (TG100) · `meanScore < threshold` |
+| 🟠 orange | cache delta **UPDATE NEEDED but not justified** · **medium** findings · uncovered requirements · **knowledge note stale** · **flaky journey quarantined** · **requirement drifted vs baseline** · `threshold ≤ meanScore < green_score` |
 | 🟢 green | all journeys pass · testguard clean (`≥ green_score`, no high/medium) · cache up to date **or** delta justified |
 
 Exit codes encode the light for CI: **0 green / 10 orange / 20 red**. Bands live
 in `pr-gate.config.json` (`threshold=70`, `green_score=85`).
+
+**Cross-run signals** (`--flakedoctor flake.json --reqdrift drift.json`): a
+failing journey that flakedoctor classifies **flaky** is *quarantined* (🟠, no bug
+filed) instead of red — only genuine regressions gate red. A **drifted** or
+**removed-with-tests** requirement (vs the committed `reqdrift.json` baseline) is a
+🟠 review signal, never red. History for flakedoctor lives in `.ci/history/`
+(`run_history.py`), carried across runs by the Actions cache.
 
 **Knowledge-note drift** (`--knowledge-status`, from `knowledge_check.py`): a stale
 app knowledge note is a *documentation-freshness* signal — it can push green→orange
@@ -39,6 +46,8 @@ never silent); omit the input entirely to opt out.
 | `gate.py` | pure `decide()` + Playwright/testguard parsers + CLI |
 | `flakedoctor.py` | cross-run flakiness triage — regression (file bug) vs flaky (quarantine) |
 | `reqdrift.py` | requirement-drift watcher — flag tests whose requirement text changed |
+| `qe_board.py` | aggregate every signal into one GO/NO-GO board + ranked next moves |
+| `run_history.py` | rolling window of recent `results.json` (the store flakedoctor reads) |
 | `justify.py` | `judge(ui_touched, yilsf_result)` — is a cache delta warranted by the PR + requirement? |
 | `bug_report.py` | `format_bug()` — YAML-front-matter + markdown repro an LLM can parse |
 | `tracker.py` | file the bug: **Jira REST** / **GitHub `gh`** / `--dry-run`; dedup + link-to-story |
@@ -110,6 +119,32 @@ the convention testguard/pr_gate already use. Requirement text comes from
 a Jira reword trips it too. Exit `10` when a drifted/removed requirement still has
 tracing tests to re-review (gateable → 🟠 review), else `0`. The hash normalizes
 whitespace/case, so only real word changes count. Tests: `tests/test_reqdrift.py`.
+
+## One board (`qe_board.py`)
+
+Each tool answers one question and prints one report; nobody puts them on one
+surface. `qe_board` is that surface — it reads the tools' JSON, aggregates it into
+a single **GO / NO-GO** verdict and a **ranked list of next moves**, and renders a
+mission-control dashboard (a self-contained HTML file — no external assets, no LLM).
+
+```bash
+python pr_gate/flakedoctor.py --runs-dir .ci/history --json                 > flake.json
+python pr_gate/reqdrift.py --requirements e2e/requirements.txt \
+  --tests 'e2e/*.spec.ts' --baseline pr_gate/reqdrift.json --json           > drift.json
+python .claude/skills/klew/scripts/a11y_report.py --app todomvc --format json > a11y.json
+
+python pr_gate/qe_board.py --app todomvc --requirements e2e/requirements.txt \
+  --flakedoctor flake.json --reqdrift drift.json --a11y a11y.json --out qe-board.html
+#   NO-GO — wrote board to qe-board.html
+```
+
+Every signal input is optional — the board degrades gracefully if a tool wasn't
+run. The verdict rollup: **NO-GO** (a regression, an orphaned/removed requirement,
+or a serious a11y blocker), **HOLD** (flaky / drift / moderate a11y / uncovered —
+review, don't ship), **GO** (all clear). Exit code mirrors the gate: `0` GO / `10`
+HOLD / `20` NO-GO. The aggregation (`build_model`) is a pure function; the HTML
+shell lives in `qe_board_template.html` with `{{TOKENS}}` injected. `--json` emits
+the board model instead of HTML. Tests: `tests/test_qe_board.py`.
 
 MCP tools don't run inside a headless Action, so CI uses `gh` + Jira REST; an
 interactive Claude session can drive the same bug dict via the GitHub/Atlassian

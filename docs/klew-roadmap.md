@@ -44,35 +44,30 @@ make author APP=<app> CODEGEN=rec.spec.ts NAME=<slug> REQ=<ID>
 Deterministic (no LLM), reuses the approval + POM + gate pipeline. See
 `.claude/skills/klew/scripts/author_journey.py`.
 
-## Built, pending integration (gate wiring)
+## Integrated into the gate ✅
 
-Two `pr_gate` tools are **built and unit-tested but not yet wired into
-`klew-pr-gate.yml`** — they run standalone today, so they add nothing per-PR until
-integrated. Both share the gate's DNA: deterministic, offline, no LLM, and exit
-codes that mirror the gate (`0`/`10`/`20`).
+Both cross-run tools are now **wired into `klew-pr-gate.yml`** and feed
+`gate.decide()` directly. Deterministic, offline, no LLM; exit codes mirror the
+gate (`0`/`10`/`20`).
 
 1. **flakedoctor** (`pr_gate/flakedoctor.py`) — cross-run flakiness triage. The gate
-   grades one run with no memory, so an intermittently-failing journey files a bug on
-   every unlucky run. flakedoctor reads the last N Playwright reports and classifies
-   each journey by history shape: regression / stable-fail → 🔴 file a bug;
-   **flaky → 🟠 quarantine (do NOT file)**; recovered / stable-pass → 🟢.
-   *Pending:* a workflow step after the journey suite that restores the last N
-   `results.json` from a run-history store (Actions cache/artifacts), runs
-   flakedoctor, and gates bug-filing on its advice — so only real regressions file
-   bugs. *Blocker:* decide where run history lives.
+   grades one run with no memory, so an intermittently-failing journey used to file a
+   bug on every unlucky run. **Resolved:** run history lives in a rolling window
+   (`pr_gate/run_history.py`, `.ci/history/`) carried across runs by the **Actions
+   cache**. The gate appends each run, runs flakedoctor over the window, and passes
+   its `quarantine` list to `decide(flaky_ids=…)` — a flaky failure is **quarantined
+   (🟠, no bug filed)**, only genuine regressions still gate 🔴. See
+   `tests/test_run_history.py`, `test_flaky_*` in `tests/test_pr_gate.py`.
 
-2. **reqdrift** (`pr_gate/reqdrift.py`) — requirement-text drift. testguard/`yilsf`
-   give *point-in-time* traceability; nobody watches a requirement's **text** changing
-   under a still-green test. reqdrift fingerprints each requirement (same idiom as the
-   knowledge-note signature), stores a human-approved baseline, and flags **drifted**
-   (text changed → tests may be stale, 🟠), **removed** (🔴 orphaned tests), **new**,
-   and **uncovered**. Bridges the `yilsf`/testguard traceability domain into the gate.
-   *Pending:* commit a baseline (`pr_gate/reqdrift.json`), add a per-PR workflow step,
-   and feed a drift result into the gate as a 🟠 signal (beside the existing
-   knowledge-drift signal).
+2. **reqdrift** (`pr_gate/reqdrift.py`) — requirement-text drift. **Resolved:** a
+   baseline is committed at `pr_gate/reqdrift.json`; the gate re-checks it per PR and
+   passes the result to `decide(reqdrift_stale=…)`, raising a 🟠 review signal
+   (drifted / removed-with-tests) beside the existing knowledge-drift signal — never
+   🔴. See `test_reqdrift_stale_*` in `tests/test_pr_gate.py`.
 
-Both follow the same shipped pattern — a fingerprint+baseline and gate-mirrored exit
-codes — so integration is **wiring, not new design**.
+**One board.** `pr_gate/qe_board.py` aggregates all of the above (plus
+`a11y_report`) into a single GO / NO-GO console + ranked next moves, generated as a
+CI artifact each run (`qe-board.html`). See `pr_gate/README.md`.
 
 ## Later phases (named, not yet built)
 
