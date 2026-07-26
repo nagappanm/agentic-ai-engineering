@@ -10,7 +10,7 @@ what we build next.
 |---|---|---|
 | Deployment | Self-hosted, in-repo, your CI + your agent; data stays in your infra; free | Cloud SaaS; ~$16k–$55k/yr |
 | Authoring | Code-first Playwright on approved POMs **+ (Phase 1) record → journey** | No-code record / plain-English; more mature today |
-| Selectors / heal | Governed: user-facing-first policy, **human-approved cache**, confidence + a11y flags, deterministic `--audit` | Auto multi-selector + **visual AI**; opaque, robust to Shadow-DOM/iframe |
+| Selectors / heal | Governed: user-facing-first policy, **human-approved cache**, confidence + a11y flags, deterministic `--audit`; **Shadow-DOM/iframe recipes + canvas/WebGL scene tier (9 engines, via the app's own scene model — no pixels)** | Auto multi-selector + **visual AI** (pixel-based, opaque); robust to Shadow-DOM/iframe |
 | Governance | Approval gate; **delta → PR → human merge**; every change a git diff | Mostly autonomous self-heal |
 | Trust-grading | **testguard** scores generated tests, catches hallucinated selectors | Self-heal reduces flakiness; no public trust-score gate |
 | CI decisioning | **`pr_gate` 🟢/🟠/🔴** — auto-merge / review / file bug, requirement-justified | CI integrations, not this packaged gate |
@@ -28,6 +28,29 @@ is **governed**: `cache_selectors.py --audit` re-validates cached selectors, a
 stale/renamed selector surfaces in CI as a 🔴 red journey (bug filed) or, when a
 selector legitimately moved, as a selector-cache **delta PR** a human merges. Self
 -heal is a *reviewable event*, not a silent mutation. No new work needed here.
+
+## Canvas / WebGL support — the scene tier (tier 5) ✅
+
+Selector tiers 1–4 all assume a DOM node exists. A `<canvas>` (2D or WebGL) is a
+single opaque node — the shapes drawn inside it have **no DOM element and no
+accessibility presence**, so no DOM locator can reach them. klew adds a **scene
+tier** for exactly this: a scene cache entry stores the target's *durable logical
+identity* (`engine` + `instance` + `by`/`value` — e.g. a Sigma node's label),
+**never a pixel**. `scripts/scene_adapters.py` converts that identity to an
+on-screen point via the app's **own** scene model, and `scripts/scene_click.py`
+emits a **real** `mousemove`/`mousedown`/`mouseup` so the engine's own hit-testing
+fires — all through the `@playwright/cli` klew already wraps: headless, no CDP
+bridge, no hardcoded coordinates.
+
+Proven across **9 engines** (adapters registered in `scene_adapters.py`, with
+sample apps + specs under `e2e/scene/` and `e2e/sigma/`):
+
+- **WebGL:** Sigma.js · PixiJS · three.js
+- **2D canvas:** Chart.js · ECharts · Fabric.js · Konva · Cytoscape · Phaser
+
+Adding a new engine is registering one adapter. Details: `references/selector-policy.md`
+§"Scene tier", and the headless-runner verdict in `e2e/sigma/FINDINGS.md` ("YES on
+both counts — individual nodes clickable with no hardcoded pixels, through klew").
 
 ## Phase 1 (this increment) — no-code recorder → klew journey
 
