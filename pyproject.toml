@@ -73,6 +73,7 @@ select = ["E", "F", "I", "UP", "B"]
 "tests/test_agent.py" = ["E402"]
 "tests/test_chain.py" = ["E402"]
 "tests/test_tools.py" = ["E402"]
+"tests/test_lead_tools.py" = ["E402"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
