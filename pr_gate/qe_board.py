@@ -59,19 +59,21 @@ def _reqkey(item):
     return (rid.rsplit("-", 1)[0], int(tail)) if tail.isdigit() else (rid, 0)
 
 
-def build_model(reqs, flake=None, drift=None, a11y=None, *,
+def build_model(reqs, flake=None, drift=None, a11y=None, intent=None, *,
                 app="app", window="last runs", branch="main",
                 crew="1 human + 2 agents"):
     """Aggregate the tools' JSON into one board model. Pure & deterministic.
 
-    `reqs`  : {id: text} from reqdrift.parse_requirements.
-    `flake` : flakedoctor triage JSON (or None).
-    `drift` : reqdrift report JSON (or None).
-    `a11y`  : a11y_report JSON (or None).
+    `reqs`   : {id: text} from reqdrift.parse_requirements.
+    `flake`  : flakedoctor triage JSON (or None).
+    `drift`  : reqdrift report JSON (or None).
+    `a11y`   : a11y_report JSON (or None).
+    `intent` : intent_coverage report JSON (or None).
     """
     flake = flake or {}
     drift = drift or {}
     a11y = a11y or {}
+    intent = intent or {}
 
     fj = flake.get("journeys", {})
     drifted = {d["id"]: d.get("tests", []) for d in drift.get("drifted", [])}
@@ -80,6 +82,8 @@ def build_model(reqs, flake=None, drift=None, a11y=None, *,
     new_ids = list(drift.get("new", []))
     a11y_findings = a11y.get("findings", [])
     a11y_sum = a11y.get("summary", {"total": 0, "serious": 0, "moderate": 0, "minor": 0})
+    intent_weak = sorted(r["id"] for r in intent.get("rows", [])
+                         if r.get("grade") in ("weak", "untested"))
 
     regressions, flaky, drift_rows = [], [], []
     rows = []
@@ -117,13 +121,14 @@ def build_model(reqs, flake=None, drift=None, a11y=None, *,
         "flaky": len(flaky),
         "drift": len(drifted),
         "a11y": a11y_sum.get("serious", 0) + a11y_sum.get("moderate", 0),
+        "intent": len(intent_weak),
     }
 
     # ---- overall verdict ----
     removed_with_tests = [r for r in removed if r.get("tests")]
     serious_a11y = a11y_sum.get("serious", 0)
     warn_present = bool(flaky or drifted or new_ids or uncovered
-                        or a11y_sum.get("moderate", 0))
+                        or a11y_sum.get("moderate", 0) or intent_weak)
     if regressions or removed_with_tests or serious_a11y:
         light, verdict, sub = "red", "NO-GO", "SHIP CLEARANCE WITHHELD"
     elif warn_present:
@@ -132,10 +137,10 @@ def build_model(reqs, flake=None, drift=None, a11y=None, *,
         light, verdict, sub = "green", "GO", "CLEARED FOR RELEASE"
 
     headline, reason = _narrate(light, regressions, flaky, drift_rows,
-                                removed_with_tests, a11y_sum, uncovered, new_ids)
+                                removed_with_tests, a11y_sum, uncovered, new_ids, intent_weak)
 
     directives = _directives(fj, regressions, flaky, drifted, removed_with_tests,
-                             a11y_findings, a11y_sum, uncovered, new_ids)
+                             a11y_findings, a11y_sum, uncovered, new_ids, intent_weak)
 
     return {
         "app": app, "window": window, "branch": branch, "crew": crew,
@@ -143,11 +148,12 @@ def build_model(reqs, flake=None, drift=None, a11y=None, *,
         "headline": headline, "reason": reason,
         "tiles": tiles, "rows": rows, "directives": directives,
         "sources": {"flakedoctor": bool(flake), "reqdrift": bool(drift),
-                    "a11y_report": bool(a11y)},
+                    "a11y_report": bool(a11y), "intent_coverage": bool(intent)},
     }
 
 
-def _narrate(light, regressions, flaky, drift_rows, removed, a11y_sum, uncovered, new_ids):
+def _narrate(light, regressions, flaky, drift_rows, removed, a11y_sum, uncovered,
+             new_ids, intent_weak):
     if light == "green":
         return ("All systems go.", "Every tracked requirement is covered and stable; "
                 "no regressions, drift, or accessibility blockers on the board.")
@@ -170,6 +176,8 @@ def _narrate(light, regressions, flaky, drift_rows, removed, a11y_sum, uncovered
             bits.append(f"{len(flaky)} flaky journey(s) quarantined (no bugs filed)")
         if drift_rows:
             bits.append(f"{len(drift_rows)} requirement(s) drifted under green tests")
+        if intent_weak:
+            bits.append(f"{len(intent_weak)} requirement(s) weakly asserted by their tests")
         return head, ". ".join(bits) + "."
     # amber
     bits = []
@@ -179,6 +187,8 @@ def _narrate(light, regressions, flaky, drift_rows, removed, a11y_sum, uncovered
         bits.append(f"{len(flaky)} flaky journey(s) to quarantine")
     if a11y_sum.get("moderate"):
         bits.append(f"{a11y_sum['moderate']} accessibility finding(s)")
+    if intent_weak:
+        bits.append(f"{len(intent_weak)} weakly-asserted requirement(s)")
     if uncovered:
         bits.append(f"{len(uncovered)} uncovered requirement(s)")
     if new_ids:
@@ -188,7 +198,7 @@ def _narrate(light, regressions, flaky, drift_rows, removed, a11y_sum, uncovered
 
 
 def _directives(fj, regressions, flaky, drifted, removed, a11y_findings, a11y_sum,
-                uncovered, new_ids):
+                uncovered, new_ids, intent_weak):
     """Ranked next moves, each tied to the tool that raised it."""
     out = []
     if regressions:
@@ -240,6 +250,14 @@ def _directives(fj, regressions, flaky, drifted, removed, a11y_findings, a11y_su
             "chips": [("warn", f"{a11y_sum['moderate']} moderate")], "sparks": [],
             "source": "a11y_report · WCAG",
         })
+    if intent_weak:
+        out.append({
+            "sev": "w", "title": f"Assert the requirement — {', '.join(intent_weak)}",
+            "body": "The tracing test cites the id but barely asserts the requirement's "
+                    "terms (e.g. its quoted UI strings). Strengthen the assertions.",
+            "chips": [("warn", "Weak intent")] + [("id", i) for i in intent_weak],
+            "sparks": [], "source": "intent_coverage",
+        })
     if uncovered:
         out.append({
             "sev": "w", "title": f"Uncovered — {', '.join(sorted(uncovered))}",
@@ -288,7 +306,8 @@ def _render_tiles(t: dict) -> str:
             ("crit" if t["regression"] else "sig", t["regression"], "Regression"),
             ("warn" if t["flaky"] else "sig", t["flaky"], "Flaky"),
             ("warn" if t["drift"] else "sig", t["drift"], "Req drift"),
-            ("warn" if t["a11y"] else "sig", t["a11y"], "A11y")]
+            ("warn" if t["a11y"] else "sig", t["a11y"], "A11y"),
+            ("warn" if t.get("intent") else "sig", t.get("intent", 0), "Intent")]
     return "\n".join(
         f'<div class="gauge {c}"><div class="n">{n}</div>'
         f'<div class="k">{html.escape(k)}</div></div>'
@@ -390,6 +409,7 @@ def main(argv=None) -> int:
     ap.add_argument("--flakedoctor", help="flakedoctor --json output")
     ap.add_argument("--reqdrift", help="reqdrift --json output")
     ap.add_argument("--a11y", help="a11y_report --format json output")
+    ap.add_argument("--intent-coverage", dest="intent", help="intent_coverage --json output")
     ap.add_argument("--app", default="app")
     ap.add_argument("--window", default="last runs")
     ap.add_argument("--branch", default="main")
@@ -405,6 +425,7 @@ def main(argv=None) -> int:
 
     model = build_model(
         reqs, _load(args.flakedoctor), _load(args.reqdrift), _load(args.a11y),
+        _load(args.intent),
         app=args.app, window=args.window, branch=args.branch, crew=args.crew)
 
     if args.json:

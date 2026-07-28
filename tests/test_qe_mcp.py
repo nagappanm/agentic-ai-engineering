@@ -37,11 +37,12 @@ def test_initialized_notification_has_no_response():
     assert qe_mcp.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
 
 
-def test_tools_list_has_all_six():
+def test_tools_list_has_every_stack_tool():
     r = qe_mcp.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     names = {t["name"] for t in r["result"]["tools"]}
     assert names == {"reqdrift_check", "flakedoctor_triage", "a11y_audit",
-                     "qe_board_model", "plan_goal", "list_selectors"}
+                     "qe_board_model", "plan_goal", "list_selectors",
+                     "qe_trends", "intent_coverage"}
     # every tool advertises an input schema
     assert all("inputSchema" in t for t in r["result"]["tools"])
 
@@ -105,6 +106,24 @@ def test_plan_goal_splits_reuse_vs_explore():
         "app": "todomvc", "needs": ["todo.count", "does.not.exist"]}))
     assert any(x["name"] == "todo.count" for x in p["reuse"])
     assert any(x["name"] == "does.not.exist" and x["why"] == "missing" for x in p["explore"])
+
+
+def test_intent_coverage_tool_grades_real_suite():
+    p = _payload(_call("intent_coverage", {
+        "requirements": "e2e/requirements.txt", "tests": ["e2e/*.spec.ts"]}))
+    assert p["requirements"] == 13
+    assert p["summary"]["untested"] == 0                       # every req is traced
+
+
+def test_qe_trends_tool_over_explicit_runs(tmp_path):
+    def run(status, i):
+        f = tmp_path / f"run-{i}.json"
+        f.write_text(json.dumps({"suites": [{"specs": [
+            {"title": "j TMVC-1", "tests": [{"results": [{"status": status}]}]}]}]}))
+        return str(f)
+    runs = [run("failed", 1), run("failed", 2), run("passed", 3), run("passed", 4)]
+    p = _payload(_call("qe_trends", {"runs": runs}))
+    assert p["runs"] == 4 and p["summary"]["trend"] == "improving"
 
 
 def test_tool_error_is_surfaced_as_iserror():

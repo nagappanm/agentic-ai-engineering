@@ -62,6 +62,8 @@ jobs:
             > /tmp/drift.json || echo '{}' > /tmp/drift.json
           python .claude/skills/klew/scripts/a11y_report.py --app "$APP" --format json \
             > /tmp/a11y.json || echo '{}' > /tmp/a11y.json
+          python pr_gate/intent_coverage.py --requirements e2e/requirements.txt \
+            --tests 'e2e/*.spec.ts' --json > /tmp/intent.json || echo '{}' > /tmp/intent.json
           FLAKE=""
           if ls .ci/history/run-*.json >/dev/null 2>&1; then
             python pr_gate/flakedoctor.py --runs-dir .ci/history --glob 'run-*.json' --json \
@@ -72,7 +74,8 @@ jobs:
           python pr_gate/qe_board.py --app "$APP" --branch main \
             --window "main @ ${GITHUB_SHA::7}" \
             --requirements e2e/requirements.txt \
-            --reqdrift /tmp/drift.json --a11y /tmp/a11y.json $FLAKE \
+            --reqdrift /tmp/drift.json --a11y /tmp/a11y.json \
+            --intent-coverage /tmp/intent.json $FLAKE \
             --out _site/qe-board.html || true
           test -s _site/qe-board.html && echo "board written" || {
             echo "board generation produced no file"; exit 1; }

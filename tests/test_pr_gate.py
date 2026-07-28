@@ -139,6 +139,26 @@ def test_reqdrift_stale_never_causes_red():
     assert v["light"] != "red"
 
 
+def test_intent_weak_turns_green_to_orange():
+    v = gate.decide(_journeys(10), _tg(mean=100), cache_update_needed=False,
+                    justified=None, config=CONFIG, intent_weak=["TMVC-5", "TMVC-6"])
+    assert v["light"] == "orange"
+    assert any("weakly asserted" in r for r in v["reasons"])
+
+
+def test_intent_weak_never_causes_red():
+    v = gate.decide(_journeys(10), _tg(mean=100), cache_update_needed=False,
+                    justified=None, config=CONFIG, intent_weak=["TMVC-5"])
+    assert v["light"] != "red"
+
+
+def test_intent_weak_noted_on_a_real_red():
+    v = gate.decide(_journeys(9, 1), _tg(mean=100), cache_update_needed=False,
+                    justified=None, config=CONFIG, intent_weak=["TMVC-5"])
+    assert v["light"] == "red"
+    assert any("weakly asserted" in n for n in v.get("notes", []))
+
+
 def test_reqdrift_stale_noted_on_a_real_red():
     v = gate.decide(_journeys(9, 1), _tg(mean=100), cache_update_needed=False,
                     justified=None, config=CONFIG, reqdrift_stale=True)

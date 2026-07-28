@@ -39,11 +39,13 @@ _KLEW_SCRIPTS = REPO / ".claude" / "skills" / "klew" / "scripts"
 sys.path.insert(0, str(_KLEW_SCRIPTS))
 
 try:  # works as `python -m pr_gate.qe_mcp` and `python pr_gate/qe_mcp.py`
-    from pr_gate import flakedoctor, qe_board, reqdrift
+    from pr_gate import flakedoctor, intent_coverage, qe_board, qe_trends, reqdrift
 except ModuleNotFoundError:  # pragma: no cover - path shim
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import flakedoctor  # type: ignore
+    import intent_coverage  # type: ignore
     import qe_board  # type: ignore
+    import qe_trends  # type: ignore
     import reqdrift  # type: ignore
 
 import _common  # noqa: E402  (klew script, via sys.path above)
@@ -108,8 +110,39 @@ def _tool_qe_board_model(args, root):
         _load_opt(root, args, "flakedoctor"),
         _load_opt(root, args, "reqdrift"),
         _load_opt(root, args, "a11y"),
+        _load_opt(root, args, "intent"),
         app=args.get("app", "app"),
     )
+
+
+def _tool_qe_trends(args, root):
+    if args.get("runs"):
+        paths = [str(_p(root, r)) for r in args["runs"]]
+    else:
+        import glob as _glob
+        d = _p(root, args["runs_dir"])
+        paths = sorted(_glob.glob(str(d / args.get("glob", "run-*.json"))))
+    reports = []
+    for p in paths:
+        r = qe_trends.flakedoctor.gate.read_report(p)
+        if r is None:
+            raise ValueError(f"missing/invalid Playwright report: {p}")
+        reports.append(r)
+    result = qe_trends.trend(reports)
+    if args.get("verdicts"):
+        vp = _p(root, args["verdicts"])
+        if vp.exists():
+            verdicts = [json.loads(ln) for ln in vp.read_text().splitlines() if ln.strip()]
+            result["verdict_accuracy"] = qe_trends.verdict_accuracy(verdicts)
+    return result
+
+
+def _tool_intent_coverage(args, root):
+    reqs = reqdrift.parse_requirements(_p(root, args["requirements"]).read_text())
+    globs = args.get("tests") or ["e2e/*.spec.ts"]
+    files = reqdrift._read_tests([str(_p(root, g)) for g in globs])
+    trace = reqdrift.build_traceability(files)
+    return intent_coverage.grade_all(reqs, trace, files)
 
 
 def _tool_plan_goal(args, root):
@@ -190,7 +223,8 @@ TOOLS = {
             "requirements": {"type": "string"},
             "flakedoctor": {"type": "string", "description": "flakedoctor --json path (optional)"},
             "reqdrift": {"type": "string", "description": "reqdrift --json path (optional)"},
-            "a11y": {"type": "string", "description": "a11y_report --json path (optional)"}}},
+            "a11y": {"type": "string", "description": "a11y_report --json path (optional)"},
+            "intent": {"type": "string", "description": "intent_coverage --json path (optional)"}}},
     ),
     "plan_goal": (
         _tool_plan_goal,
@@ -209,6 +243,26 @@ TOOLS = {
         "confidence, status, a11y flag). Read-only.",
         {"type": "object", "required": ["app"], "properties": {
             "app": {"type": "string"}}},
+    ),
+    "qe_trends": (
+        _tool_qe_trends,
+        "Longitudinal health over the run-history window: per-run pass-rate, "
+        "flakiness rate, most-flaky/chronic journeys, trend direction; optional "
+        "gate-vs-human meta-eval from a verdict log.",
+        {"type": "object", "properties": {
+            "runs_dir": {"type": "string"}, "glob": {"type": "string"},
+            "runs": {"type": "array", "items": {"type": "string"}},
+            "verdicts": {"type": "string", "description": "optional {sha,light,merged} JSONL"}}},
+    ),
+    "intent_coverage": (
+        _tool_intent_coverage,
+        "Grade whether each requirement's tracing test actually ASSERTS its salient "
+        "terms (content words + quoted UI strings), not just cites its id: "
+        "strong/partial/weak/untested.",
+        {"type": "object", "required": ["requirements"], "properties": {
+            "requirements": {"type": "string"},
+            "tests": {"type": "array", "items": {"type": "string"},
+                      "description": "spec globs (default ['e2e/*.spec.ts'])"}}},
     ),
 }
 
