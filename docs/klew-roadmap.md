@@ -152,10 +152,14 @@ governed, no LLM in the loop unless a human asked for one.
    not just another autonomous loop. Dependency-free (hand-rolled MCP stdio
    JSON-RPC), so it stays offline and testable. See `pr_gate/qe_mcp.py`.
 
-2. **Living dashboard — publish `qe_board` to Pages on merge**
-   Today the board is a per-run CI artifact nobody opens. Publish it to GitHub
-   Pages on merge to `main` (or on a schedule) → one always-current team board.
-   The right cadence for a dashboard is post-merge, not per-PR.
+2. **Living dashboard — publish `qe_board` to Pages on merge** ✅ *(shipped)*
+   `qe_board` was a per-run CI artifact nobody opened. `.github/workflows/qe-board-pages.yml`
+   now regenerates the board on every merge to `main` and publishes it to **GitHub
+   Pages** alongside the existing docs site (a superset — `index.html` stays the
+   landing, the board lives at `<pages-url>/qe-board.html`). Deterministic + offline
+   (reqdrift + a11y always; flakedoctor when run-history is available), and a
+   HOLD/NO-GO verdict is a *result*, not a failed deploy. One-time: set repo Settings
+   → Pages → Source = "GitHub Actions".
 
 3. **`qe-trends` — longitudinal history + meta-eval**
    We can't match AURA's 8.7B-run data moat, but `run_history.py` already seeds
