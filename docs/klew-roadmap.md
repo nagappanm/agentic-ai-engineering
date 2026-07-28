@@ -1,8 +1,10 @@
 # klew — competitive roadmap
 
-Where the klew stack (klew + testguard + yilsf + `pr_gate`) stands against
-managed AI-testing suites (e.g. SmartBear **Reflect**/**HaloAI**/**Zephyr**), and
-what we build next.
+Where the klew stack (klew + testguard + yilsf + `pr_gate` + `qe_board`) stands
+against the 2026 AI-testing field — from managed suites (SmartBear
+**Reflect**/**HaloAI**/**Zephyr**, **Sauce Labs AURA**) to the free official
+tooling (**Microsoft Playwright agents + MCP**) and the code-side verifiers
+(**Qodo**) — and what we build next.
 
 ## Positioning — where each wins
 
@@ -20,6 +22,49 @@ what we build next.
 **Net:** they lead on no-code, visual robustness, breadth, and Jira test
 management; we lead on **ownership, governance, trust-grading, CI-gate
 decisioning, token cost, and LLM-agnosticism**.
+
+## The 2026 field — one row per contender
+
+The category has crystallized on one thesis (verify AI-written code at the speed
+it's written, with humans in the loop). Here's where each notable player sits and
+how the klew stack differs. Deliberately honest about where we're behind.
+
+| Product | Deployment / cost | Core approach | Heal / flakiness | Where it beats klew | Where klew differs |
+|---|---|---|---|---|---|
+| **Sauce Labs AURA** | Cloud SaaS, enterprise custom | Closed-loop agentic: NL intent → author → execute → analyze → learn loop; **"Data Moat" — 8.7B real test runs** | Intent/journey-based tests that survive UI change; 41% faster root-cause vs general LLMs | Real-device cloud, web+mobile, IDE plugins (incl. Claude Code) + **Sauce MCP server**, data moat, enterprise proof (Walmart 30×) | Self-hosted / in-repo, **governed approval** (not autonomous), token-lean, LLM-agnostic, free |
+| **MS Playwright agents + MCP** ⭐ | **OSS, free**, Microsoft | The *same* Planner → Generator → **Healer** loop klew wraps; MCP server (40+ tools) + Copilot | Healer: on failure, a11y-snapshot → role-based locator → auto-rerun (**autonomous, in-editor**) | Free, official, zero-friction in VS Code/Copilot, 40+ MCP tools | **Governance/approval gate**, per-app cache + knowledge durability, ~4× token efficiency (CLI vs MCP), `pr_gate` CI decisioning — klew is the *governed wrapper* over exactly this |
+| **Qodo** (ex-Codium) | Free tier / $30 seat / **self-host + air-gapped**; OSS PR-Agent | Code-side verifier: multi-agent PR review (bug/quality/security/coverage) + **Qodo Cover** autonomous test-gen | n/a — operates at the unit/code layer, not UI selectors | Best-in-class AI code review (~60% F1), unit-test gen, self-hostable/air-gapped, multi-git | **Different flank**: Qodo verifies *code/units*; klew verifies *UI journeys* + governs selectors — **complementary, not competing** |
+| **Applitools** | Cloud SaaS (on-prem for enterprise) | **Visual AI** (Eyes) + Ultrafast Grid + Autonomous agent | Visual-diff based; robust to DOM churn via the visual model | Visual regression + cross-browser/device grid | The exact capability klew lists as a **non-goal / later phase** — functional-journey + governance is our focus, not pixels |
+| **SmartBear** (Reflect/HaloAI/Zephyr) | Cloud SaaS ~$16–55k/yr | No-code record / plain-English + visual AI; **Zephyr** Jira test mgmt | Autonomous multi-selector self-heal | No-code maturity, visual robustness, Jira depth, desktop/mobile breadth | Ownership, governance, trust-grading, gate, token cost (see table above) |
+| **Commercial NL field** (mabl · testRigor · Functionize · Testim · Katalon · ACCELQ) | Cloud SaaS | Plain-English / no-code generative tests | Autonomous self-heal | No-code accessibility, managed grids | Same line: **governed vs autonomous, self-hosted vs cloud, free vs subscription** |
+
+### The comparison that actually matters
+
+Not the SaaS field — **Microsoft's own Playwright agents** (Planner/Generator/Healer
++ MCP). They're **free, official, and run the same author→heal loop klew wraps**, so
+the honest question isn't "can klew do it?" but "**why klew and not Microsoft's free
+agents?**" The answer is our whole reason to exist, and it must hold on *these* axes,
+not capability:
+
+- **Governance** — Microsoft's Healer *silently* rewrites a locator in your editor;
+  klew emits a **human-approved cache delta → PR → merge**. Every change is a
+  reviewable git diff, not an autonomous mutation.
+- **Durability** — the approved **selector cache + per-app knowledge notes** (with
+  drift checks) are memory the raw agents don't keep between runs.
+- **Cost** — the token-lean CLI is ~4× cheaper than streaming full snapshots through
+  MCP; on a large suite that is the difference between viable and not.
+- **CI decisioning** — `pr_gate` + `flakedoctor` + `reqdrift` + `qe_board` turn the
+  loop into a **governed release gate**, which the bare agents don't provide.
+
+If klew can't win on governance, durability, cost, and CI-gating, it shouldn't exist
+— so that is exactly where we invest.
+
+### Where we're honestly behind
+
+No visual AI (Applitools/SmartBear win), no managed real-device cloud or mobile
+breadth (AURA/SmartBear win), no proprietary data moat (AURA's 8.7B runs), and less
+no-code polish than the SaaS field. We trade all of that for **ownership,
+governance, and cost** — a deliberate bet, not an oversight.
 
 ## Already covered — governed self-healing
 
