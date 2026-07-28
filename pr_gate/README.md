@@ -48,6 +48,8 @@ never silent); omit the input entirely to opt out.
 | `reqdrift.py` | requirement-drift watcher — flag tests whose requirement text changed |
 | `qe_board.py` | aggregate every signal into one GO/NO-GO board + ranked next moves |
 | `run_history.py` | rolling window of recent `results.json` (the store flakedoctor reads) |
+| `qe_trends.py` | longitudinal health over the run-history window + gate-vs-human meta-eval |
+| `intent_coverage.py` | does the test assert the requirement's terms, not just cite its id? |
 | `qe_mcp.py` | MCP server exposing the stack's offline tools to any agent (dependency-free) |
 | `justify.py` | `judge(ui_touched, yilsf_result)` — is a cache delta warranted by the PR + requirement? |
 | `bug_report.py` | `format_bug()` — YAML-front-matter + markdown repro an LLM can parse |
@@ -146,6 +148,35 @@ review, don't ship), **GO** (all clear). Exit code mirrors the gate: `0` GO / `1
 HOLD / `20` NO-GO. The aggregation (`build_model`) is a pure function; the HTML
 shell lives in `qe_board_template.html` with `{{TOKENS}}` injected. `--json` emits
 the board model instead of HTML. Tests: `tests/test_qe_board.py`.
+
+## Trends + meta-eval (`qe_trends.py`)
+
+`flakedoctor` looks at one journey's recent runs; `qe_trends` looks at the **whole
+suite over time**. From the run-history window it reports a per-run pass-rate
+sparkline, the flakiness rate, most-flaky + chronically-failing journeys, and an
+improving / degrading / steady direction. Given an optional verdict log
+(`{sha, light, merged}` JSONL) it also scores **how often the gate's call matched
+the human merge** (orange excluded — it defers by design). The *owned-data* answer
+to a vendor data moat. Offline, reuses `flakedoctor`'s parser. Tests:
+`tests/test_qe_trends.py`.
+
+## Intent coverage (`intent_coverage.py`)
+
+Traceability proves a requirement is *cited* (its id is in a test title); it
+doesn't prove the test *asserts* it. `intent_coverage` extracts each requirement's
+salient terms — content words plus **quoted UI strings** (`"items left"`,
+`"Clear completed"`) — and scores how many the tracing test actually contains:
+**strong / partial / weak / untested**.
+
+```bash
+python pr_gate/intent_coverage.py --requirements e2e/requirements.txt --tests 'e2e/*.spec.ts'
+#   🟠 TMVC-5  0.667  (partial) · missing: reveal, "Clear completed"
+```
+
+A deterministic **lexical heuristic** (no LLM), honest about being a signal — on
+the real todomvc suite it flags that TMVC-5/6 name `"Clear completed"` but their
+tests never assert it. `--fail-on-weak` gives a gateable exit code. Tests:
+`tests/test_intent_coverage.py`.
 
 ## The stack as an MCP server (`qe_mcp.py`)
 
