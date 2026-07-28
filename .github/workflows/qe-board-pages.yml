@@ -1,0 +1,85 @@
+name: qe-board → Pages
+
+# Living dashboard: on every merge to main, regenerate qe_board.html from the
+# stack's signals and publish it to GitHub Pages alongside the existing docs site.
+# A board is a dashboard — its right cadence is post-merge (always current), not
+# per-PR. Deterministic + offline: no browser, no LLM.
+#
+# One-time setup: repo Settings → Pages → Build and deployment → Source =
+# "GitHub Actions" (this replaces classic serve-from-/docs, which is why we
+# publish the existing docs/ content too — the site stays a superset, index.html
+# remains the landing page, and qe-board.html is added at <pages-url>/qe-board.html).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never cancel an in-flight deploy; let the newest merge win the queue.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Best-effort: restore the flakedoctor run-history window the PR gate builds.
+      # Cache scoping means it may be empty on a main push — the board degrades
+      # gracefully (no flake data) rather than failing.
+      - name: Restore run-history (best-effort, for flakedoctor)
+        uses: actions/cache/restore@v4
+        with:
+          path: .ci/history
+          key: klew-run-history-pages
+          restore-keys: |
+            klew-run-history-
+
+      - name: Build the site (existing docs + the living board)
+        run: |
+          APP=$(python -c "import json;print(json.load(open('pr_gate/pr-gate.config.json')).get('app_cache','todomvc'))")
+          APP=${APP:-todomvc}
+          mkdir -p _site
+          cp -r docs/. _site/ 2>/dev/null || true   # preserve the existing Pages content
+
+          # Signals (all offline; each falls back to empty so the deploy never breaks).
+          python pr_gate/reqdrift.py --requirements e2e/requirements.txt \
+            --tests 'e2e/*.spec.ts' --baseline pr_gate/reqdrift.json --json \
+            > /tmp/drift.json || echo '{}' > /tmp/drift.json
+          python .claude/skills/klew/scripts/a11y_report.py --app "$APP" --format json \
+            > /tmp/a11y.json || echo '{}' > /tmp/a11y.json
+          FLAKE=""
+          if ls .ci/history/run-*.json >/dev/null 2>&1; then
+            python pr_gate/flakedoctor.py --runs-dir .ci/history --glob 'run-*.json' --json \
+              > /tmp/flake.json && FLAKE="--flakedoctor /tmp/flake.json"
+          fi
+
+          # qe_board exits 10/20 on HOLD/NO-GO (a verdict, not a failure) → || true.
+          python pr_gate/qe_board.py --app "$APP" --branch main \
+            --window "main @ ${GITHUB_SHA::7}" \
+            --requirements e2e/requirements.txt \
+            --reqdrift /tmp/drift.json --a11y /tmp/a11y.json $FLAKE \
+            --out _site/qe-board.html || true
+          test -s _site/qe-board.html && echo "board written" || {
+            echo "board generation produced no file"; exit 1; }
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
