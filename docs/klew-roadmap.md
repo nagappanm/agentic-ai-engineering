@@ -143,7 +143,7 @@ Four bets that turn the 2026 gaps (above) into owned strengths rather than
 weaknesses. Same discipline as the rest of the stack: deterministic, offline,
 governed, no LLM in the loop unless a human asked for one.
 
-1. **`qe-mcp` — the stack as an MCP server** 🔨 *(building now)*
+1. **`qe-mcp` — the stack as an MCP server** ✅ *(shipped)*
    AURA ships a Sauce MCP server; Microsoft ships Playwright MCP; we don't. Expose
    the governed, offline tools (`reqdrift`, `flakedoctor`, `a11y_report`,
    `qe_board`, `plan_goal`, selector-cache reads) as MCP tools so **any** agent
@@ -161,18 +161,25 @@ governed, no LLM in the loop unless a human asked for one.
    HOLD/NO-GO verdict is a *result*, not a failed deploy. One-time: set repo Settings
    → Pages → Source = "GitHub Actions".
 
-3. **`qe-trends` — longitudinal history + meta-eval**
+3. **`qe-trends` — longitudinal history + meta-eval** ✅ *(shipped)*
    We can't match AURA's 8.7B-run data moat, but `run_history.py` already seeds
-   **our repo's own** signal. Accumulate it into trends — flakiness rate over time,
-   drift frequency, coverage trajectory — plus a meta-eval: *how often does
-   `pr_gate`'s verdict match the human merge decision?* The honest reframe of the
-   moat: not more data, but *owned* data.
+   **our repo's own** signal. `pr_gate/qe_trends.py` turns the run-history window
+   into trends — per-run pass-rate sparkline, flakiness rate, most-flaky + chronic
+   journeys, and an improving/degrading direction — plus a meta-eval that, given a
+   verdict log (`{sha, light, merged}`), scores *how often `pr_gate`'s call matched
+   the human merge decision* (orange excluded — it defers by design). Deterministic,
+   offline; reuses `flakedoctor`'s outcome parsing. The honest reframe of the moat:
+   not more data, but *owned* data.
 
-4. **Intent-coverage grading**
-   AURA verifies against "business intent"; our traceability today only checks the
-   requirement **id appears in the test title**. Deepen it: does the test actually
-   **assert the requirement's acceptance criteria**, not merely reference the id? A
-   `testguard` semantic-coverage score closes that gap.
+4. **Intent-coverage grading** ✅ *(shipped)*
+   AURA verifies against "business intent"; our traceability only checked that the
+   requirement **id appears in the test title**. `pr_gate/intent_coverage.py` goes
+   deeper: it extracts each requirement's **salient terms — content words plus
+   quoted UI strings** ("items left", "Clear completed") — and scores how many the
+   tracing test actually asserts (strong / partial / weak / untested). A **lexical
+   heuristic**, deterministic and offline (no LLM), honest about being a signal. On
+   the real todomvc suite it already flags a genuine gap: TMVC-5/6 name
+   `"Clear completed"` but their tests never assert it.
 
 ## Later phases (named, not yet built)
 
