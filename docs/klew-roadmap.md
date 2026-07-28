@@ -137,6 +137,39 @@ gate (`0`/`10`/`20`).
 `a11y_report`) into a single GO / NO-GO console + ranked next moves, generated as a
 CI artifact each run (`qe-board.html`). See `pr_gate/README.md`.
 
+## Answering the field — next builds
+
+Four bets that turn the 2026 gaps (above) into owned strengths rather than
+weaknesses. Same discipline as the rest of the stack: deterministic, offline,
+governed, no LLM in the loop unless a human asked for one.
+
+1. **`qe-mcp` — the stack as an MCP server** 🔨 *(building now)*
+   AURA ships a Sauce MCP server; Microsoft ships Playwright MCP; we don't. Expose
+   the governed, offline tools (`reqdrift`, `flakedoctor`, `a11y_report`,
+   `qe_board`, `plan_goal`, selector-cache reads) as MCP tools so **any** agent
+   (Claude Code, Cursor, an IDE) can call them. This is the sharpest answer to
+   "why klew and not Microsoft's free agents?" — it makes *governed* QE composable,
+   not just another autonomous loop. Dependency-free (hand-rolled MCP stdio
+   JSON-RPC), so it stays offline and testable. See `pr_gate/qe_mcp.py`.
+
+2. **Living dashboard — publish `qe_board` to Pages on merge**
+   Today the board is a per-run CI artifact nobody opens. Publish it to GitHub
+   Pages on merge to `main` (or on a schedule) → one always-current team board.
+   The right cadence for a dashboard is post-merge, not per-PR.
+
+3. **`qe-trends` — longitudinal history + meta-eval**
+   We can't match AURA's 8.7B-run data moat, but `run_history.py` already seeds
+   **our repo's own** signal. Accumulate it into trends — flakiness rate over time,
+   drift frequency, coverage trajectory — plus a meta-eval: *how often does
+   `pr_gate`'s verdict match the human merge decision?* The honest reframe of the
+   moat: not more data, but *owned* data.
+
+4. **Intent-coverage grading**
+   AURA verifies against "business intent"; our traceability today only checks the
+   requirement **id appears in the test title**. Deepen it: does the test actually
+   **assert the requirement's acceptance criteria**, not merely reference the id? A
+   `testguard` semantic-coverage score closes that gap.
+
 ## Later phases (named, not yet built)
 
 1. **Visual regression** — `toHaveScreenshot` baselines in journeys, surfaced as a

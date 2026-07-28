@@ -48,6 +48,7 @@ never silent); omit the input entirely to opt out.
 | `reqdrift.py` | requirement-drift watcher — flag tests whose requirement text changed |
 | `qe_board.py` | aggregate every signal into one GO/NO-GO board + ranked next moves |
 | `run_history.py` | rolling window of recent `results.json` (the store flakedoctor reads) |
+| `qe_mcp.py` | MCP server exposing the stack's offline tools to any agent (dependency-free) |
 | `justify.py` | `judge(ui_touched, yilsf_result)` — is a cache delta warranted by the PR + requirement? |
 | `bug_report.py` | `format_bug()` — YAML-front-matter + markdown repro an LLM can parse |
 | `tracker.py` | file the bug: **Jira REST** / **GitHub `gh`** / `--dry-run`; dedup + link-to-story |
@@ -145,6 +146,35 @@ review, don't ship), **GO** (all clear). Exit code mirrors the gate: `0` GO / `1
 HOLD / `20` NO-GO. The aggregation (`build_model`) is a pure function; the HTML
 shell lives in `qe_board_template.html` with `{{TOKENS}}` injected. `--json` emits
 the board model instead of HTML. Tests: `tests/test_qe_board.py`.
+
+## The stack as an MCP server (`qe_mcp.py`)
+
+AURA ships a Sauce MCP server; Microsoft ships Playwright MCP. `qe_mcp` serves the
+klew stack's **deterministic, offline** tools over the Model Context Protocol so
+any agent (Claude Code, Cursor, an IDE) can call *governed* QE — the answer to
+"why klew and not the free autonomous agents?" is that these are composable and
+human-gated, not another self-healing loop.
+
+Register it in an MCP client (`.mcp.json` / client config):
+
+```jsonc
+{ "mcpServers": { "qe": { "command": "python", "args": ["pr_gate/qe_mcp.py"] } } }
+```
+
+Tools exposed (all read-only / analysis-only — nothing mutates the approved cache):
+
+| Tool | Does |
+|---|---|
+| `reqdrift_check` | requirement-text drift vs the committed baseline |
+| `flakedoctor_triage` | cross-run flaky-vs-regression classification |
+| `a11y_audit` | WCAG audit from an app's cache (+ optional snapshot) |
+| `qe_board_model` | aggregate the signals → GO/NO-GO model + directives |
+| `plan_goal` | cache-first: which selectors a goal can reuse vs must explore |
+| `list_selectors` | read an app's approved selector cache |
+
+**Dependency-free** — it speaks MCP's stdio transport (newline-delimited JSON-RPC
+2.0) directly, no SDK, so it stays offline and the whole request path is the pure
+`handle()` function. Tests: `tests/test_qe_mcp.py`.
 
 MCP tools don't run inside a headless Action, so CI uses `gh` + Jira REST; an
 interactive Claude session can drive the same bug dict via the GitHub/Atlassian
