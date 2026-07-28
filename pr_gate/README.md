@@ -20,17 +20,18 @@ journeys (Output ① PASS/FAIL) + testguard grade + cache dry-run (Output ②) +
 | Light | When |
 |---|---|
 | 🔴 red | a **non-flaky** journey failed · any **high**-severity testguard finding · hallucinated selector (TG100) · `meanScore < threshold` |
-| 🟠 orange | cache delta **UPDATE NEEDED but not justified** · **medium** findings · uncovered requirements · **knowledge note stale** · **flaky journey quarantined** · **requirement drifted vs baseline** · `threshold ≤ meanScore < green_score` |
+| 🟠 orange | cache delta **UPDATE NEEDED but not justified** · **medium** findings · uncovered requirements · **knowledge note stale** · **flaky journey quarantined** · **requirement drifted vs baseline** · **requirement weakly asserted** · `threshold ≤ meanScore < green_score` |
 | 🟢 green | all journeys pass · testguard clean (`≥ green_score`, no high/medium) · cache up to date **or** delta justified |
 
 Exit codes encode the light for CI: **0 green / 10 orange / 20 red**. Bands live
 in `pr-gate.config.json` (`threshold=70`, `green_score=85`).
 
-**Cross-run signals** (`--flakedoctor flake.json --reqdrift drift.json`): a
+**Cross-run signals** (`--flakedoctor flake.json --reqdrift drift.json --intent-coverage intent.json`): a
 failing journey that flakedoctor classifies **flaky** is *quarantined* (🟠, no bug
 filed) instead of red — only genuine regressions gate red. A **drifted** or
-**removed-with-tests** requirement (vs the committed `reqdrift.json` baseline) is a
-🟠 review signal, never red. History for flakedoctor lives in `.ci/history/`
+**removed-with-tests** requirement (vs the committed `reqdrift.json` baseline), and
+a **weak/untested-asserted** requirement (from `intent_coverage`), are each a 🟠
+review signal, never red. History for flakedoctor lives in `.ci/history/`
 (`run_history.py`), carried across runs by the Actions cache.
 
 **Knowledge-note drift** (`--knowledge-status`, from `knowledge_check.py`): a stale
@@ -143,8 +144,8 @@ python pr_gate/qe_board.py --app todomvc --requirements e2e/requirements.txt \
 
 Every signal input is optional — the board degrades gracefully if a tool wasn't
 run. The verdict rollup: **NO-GO** (a regression, an orphaned/removed requirement,
-or a serious a11y blocker), **HOLD** (flaky / drift / moderate a11y / uncovered —
-review, don't ship), **GO** (all clear). Exit code mirrors the gate: `0` GO / `10`
+or a serious a11y blocker), **HOLD** (flaky / drift / moderate a11y / uncovered /
+weak-intent — review, don't ship), **GO** (all clear). Exit code mirrors the gate: `0` GO / `10`
 HOLD / `20` NO-GO. The aggregation (`build_model`) is a pure function; the HTML
 shell lives in `qe_board_template.html` with `{{TOKENS}}` injected. `--json` emits
 the board model instead of HTML. Tests: `tests/test_qe_board.py`.
@@ -175,7 +176,9 @@ python pr_gate/intent_coverage.py --requirements e2e/requirements.txt --tests 'e
 
 A deterministic **lexical heuristic** (no LLM), honest about being a signal — on
 the real todomvc suite it flags that TMVC-5/6 name `"Clear completed"` but their
-tests never assert it. `--fail-on-weak` gives a gateable exit code. Tests:
+tests never assert it. `--fail-on-weak` gives a gateable exit code. The gate
+escalates only **weak / untested** requirements to 🟠 (partials are surfaced in the
+report, not gated, so the gate doesn't drown in noise). Tests:
 `tests/test_intent_coverage.py`.
 
 ## The stack as an MCP server (`qe_mcp.py`)
@@ -202,6 +205,8 @@ Tools exposed (all read-only / analysis-only — nothing mutates the approved ca
 | `qe_board_model` | aggregate the signals → GO/NO-GO model + directives |
 | `plan_goal` | cache-first: which selectors a goal can reuse vs must explore |
 | `list_selectors` | read an app's approved selector cache |
+| `qe_trends` | longitudinal health + gate-vs-human meta-eval over the run-history window |
+| `intent_coverage` | grade whether each requirement's test asserts its terms |
 
 **Dependency-free** — it speaks MCP's stdio transport (newline-delimited JSON-RPC
 2.0) directly, no SDK, so it stays offline and the whole request path is the pure

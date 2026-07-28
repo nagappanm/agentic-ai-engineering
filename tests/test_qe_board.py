@@ -68,6 +68,25 @@ def test_removed_with_tests_is_no_go():
     assert m["light"] == "red"
 
 
+def test_intent_weak_is_hold_with_tile_and_directive():
+    intent = {"rows": [
+        {"id": "TMVC-5", "grade": "weak"}, {"id": "TMVC-1", "grade": "strong"},
+        {"id": "TMVC-2", "grade": "untested"}]}
+    m = qb.build_model(REQS, intent=intent)
+    assert m["light"] == "amber"                          # weak intent → HOLD
+    assert m["tiles"]["intent"] == 2                       # weak + untested
+    titles = [d["title"] for d in m["directives"]]
+    assert any("Assert the requirement" in t for t in titles)
+    assert m["sources"]["intent_coverage"] is True
+
+
+def test_intent_strong_only_does_not_gate():
+    intent = {"rows": [{"id": "TMVC-1", "grade": "strong"},
+                       {"id": "TMVC-2", "grade": "partial"}]}
+    m = qb.build_model(REQS, intent=intent)
+    assert m["light"] == "green" and m["tiles"]["intent"] == 0
+
+
 def test_serious_a11y_is_no_go():
     a11y = {"findings": [{"severity": "serious", "target": "btn", "rule": "A11Y-NAME"}],
             "summary": {"total": 1, "serious": 1, "moderate": 0, "minor": 0}}
@@ -83,7 +102,8 @@ def test_tiles_count_each_signal():
     drift = {"drifted": [{"id": "TMVC-5", "tests": []}], "removed": [], "new": [], "uncovered": []}
     a11y = {"findings": [], "summary": {"total": 2, "serious": 0, "moderate": 2, "minor": 0}}
     m = qb.build_model(REQS, flake=flake, drift=drift, a11y=a11y)
-    assert m["tiles"] == {"requirements": 4, "regression": 1, "flaky": 1, "drift": 1, "a11y": 2}
+    assert m["tiles"] == {"requirements": 4, "regression": 1, "flaky": 1, "drift": 1,
+                          "a11y": 2, "intent": 0}
 
 
 def test_uncovered_row_is_flagged():

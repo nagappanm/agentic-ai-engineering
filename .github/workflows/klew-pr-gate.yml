@@ -133,6 +133,9 @@ jobs:
           else
             echo '{}' > a11y.json
           fi
+          # 4) intent coverage: do the tests actually assert their requirements?
+          python pr_gate/intent_coverage.py --requirements /tmp/requirements.txt \
+            --tests 'e2e/*.spec.ts' --json > intent.json || echo '{}' > intent.json
 
       - name: Cache-update? (does this PR change the selector cache?) + justify
         id: cache
@@ -172,7 +175,7 @@ jobs:
             --cache-status "${{ steps.cache.outputs.status }}" \
             --justified "${{ steps.cache.outputs.justified }}" \
             --knowledge-status "${{ steps.knowledge.outputs.status }}" \
-            --flakedoctor flake.json --reqdrift drift.json \
+            --flakedoctor flake.json --reqdrift drift.json --intent-coverage intent.json \
             --emit-bugs /tmp/bugs --pr "$PR" --base-url "$BASE_URL" \
             --json > verdict.json
           code=$?
@@ -189,6 +192,7 @@ jobs:
           python pr_gate/qe_board.py --app "${APP:-app}" \
             --requirements /tmp/requirements.txt \
             --flakedoctor flake.json --reqdrift drift.json --a11y a11y.json \
+            --intent-coverage intent.json \
             --branch "${{ github.head_ref || github.ref_name }}" --window "last 10 runs" \
             --out qe-board.html || true
 
@@ -204,6 +208,7 @@ jobs:
             flake.json
             drift.json
             a11y.json
+            intent.json
             qe-board.html
             e2e/test-results/**
 

@@ -129,6 +129,7 @@ def decide(
     knowledge_stale: bool = False,
     flaky_ids: set | list | None = None,
     reqdrift_stale: bool = False,
+    intent_weak: set | list | None = None,
 ) -> dict:
     """Pure traffic-light decision. Returns {light, reasons, ...}. First match wins.
 
@@ -145,12 +146,22 @@ def decide(
 
     `reqdrift_stale` (a requirement's text drifted vs the committed baseline) is,
     like knowledge drift, a review signal — GREEN→ORANGE, never RED.
+
+    `intent_weak` (requirement ids whose tracing tests barely assert the
+    requirement's terms — from intent_coverage) is likewise a review signal:
+    GREEN→ORANGE, never RED. A weakly-asserted requirement is a coverage gap to
+    review, not a product defect.
     """
     green_score = config.get("green_score", 85)
     knowledge_drift = config.get("knowledge_drift", "orange")  # "orange" gates | "info" surfaces
     knowledge_msg = "knowledge note stale vs cache — review the app notes"
     drift_msg = "requirement(s) drifted vs baseline — re-review the tracing tests"
     flaky_ids = set(flaky_ids or [])
+    intent_weak = sorted(set(intent_weak or []))
+    intent_msg = (
+        f"{len(intent_weak)} requirement(s) weakly asserted by their tests: "
+        f"{', '.join(intent_weak)}" if intent_weak else None
+    )
     info_note = [knowledge_msg] if (knowledge_stale and knowledge_drift != "orange") else []
     reasons: list[str] = []
 
@@ -171,6 +182,8 @@ def decide(
             n.append(drift_msg)
         if quarantine_msg:
             n.append(quarantine_msg)
+        if intent_msg:
+            n.append(intent_msg)
         return n
 
     # ---- RED ---- (knowledge/req drift & flaky quarantine never cause red; noted)
@@ -195,6 +208,8 @@ def decide(
         reasons.append(quarantine_msg)
     if reqdrift_stale:
         reasons.append(drift_msg)
+    if intent_msg:
+        reasons.append(intent_msg)
     if s["medium"]:
         reasons.append(f"{len(s['medium'])} medium-severity testguard finding(s)")
     if s["uncovered"]:
@@ -241,6 +256,10 @@ def main() -> None:
     ap.add_argument(
         "--reqdrift", metavar="JSON",
         help="reqdrift --json output; drifted/removed-with-tests raises an orange review signal",
+    )
+    ap.add_argument(
+        "--intent-coverage", metavar="JSON",
+        help="intent_coverage --json output; weak/untested requirements raise an orange signal",
     )
     ap.add_argument("--config", default=None)
     ap.add_argument("--json", action="store_true", help="emit verdict JSON on stdout")
@@ -291,9 +310,14 @@ def main() -> None:
     reqdrift_stale = bool(
         drift and (drift.get("drifted") or [r for r in drift.get("removed", []) if r.get("tests")])
     )
+    # intent_coverage: requirements whose tests barely assert them are an orange signal.
+    ic = read_report(args.intent_coverage) if args.intent_coverage else None
+    intent_weak = ([r["id"] for r in ic.get("rows", []) if r.get("grade") in ("weak", "untested")]
+                   if ic else [])
 
     verdict = decide(journeys, tg, cache_update_needed, justified, config,
-                     knowledge_stale, flaky_ids=flaky_ids, reqdrift_stale=reqdrift_stale)
+                     knowledge_stale, flaky_ids=flaky_ids, reqdrift_stale=reqdrift_stale,
+                     intent_weak=intent_weak)
     verdict["summary"] = {
         "journeys": len(journeys),
         "passed": sum(1 for j in journeys if j["status"] == "passed"),
@@ -302,6 +326,7 @@ def main() -> None:
         "quarantined": sorted(flaky_ids & {j["id"] for j in journeys
                                            if j["status"] != "passed"}),
         "reqdrift_stale": reqdrift_stale,
+        "intent_weak": sorted(intent_weak),
     }
 
     if args.emit_bugs and verdict["light"] == "red":
