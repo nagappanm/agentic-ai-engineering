@@ -137,20 +137,25 @@ gate (`0`/`10`/`20`).
 `a11y_report`) into a single GO / NO-GO console + ranked next moves, generated as a
 CI artifact each run (`qe-board.html`). See `pr_gate/README.md`.
 
-## Answering the field — next builds
+## Answering the field — delivered ✅
 
 Four bets that turn the 2026 gaps (above) into owned strengths rather than
-weaknesses. Same discipline as the rest of the stack: deterministic, offline,
-governed, no LLM in the loop unless a human asked for one.
+weaknesses. **All four shipped and merged**, and the two new signals are wired end
+to end (gate → board → MCP), not left as standalone scripts. Same discipline as the
+rest of the stack: deterministic, offline, governed, no LLM in the loop unless a
+human asked for one.
 
 1. **`qe-mcp` — the stack as an MCP server** ✅ *(shipped)*
-   AURA ships a Sauce MCP server; Microsoft ships Playwright MCP; we don't. Expose
-   the governed, offline tools (`reqdrift`, `flakedoctor`, `a11y_report`,
-   `qe_board`, `plan_goal`, selector-cache reads) as MCP tools so **any** agent
-   (Claude Code, Cursor, an IDE) can call them. This is the sharpest answer to
-   "why klew and not Microsoft's free agents?" — it makes *governed* QE composable,
-   not just another autonomous loop. Dependency-free (hand-rolled MCP stdio
-   JSON-RPC), so it stays offline and testable. See `pr_gate/qe_mcp.py`.
+   AURA ships a Sauce MCP server; Microsoft ships Playwright MCP; now we do too.
+   `pr_gate/qe_mcp.py` exposes **eight** governed, offline tools over MCP —
+   `reqdrift_check`, `flakedoctor_triage`, `a11y_audit`, `qe_board_model`,
+   `plan_goal`, `list_selectors`, `qe_trends`, `intent_coverage` — so **any** agent
+   (Claude Code, Cursor, an IDE) can call *governed* QE. This is the sharpest answer
+   to "why klew and not Microsoft's free agents?": it makes governed QE composable,
+   not just another autonomous loop. All tools are read-only / analysis-only —
+   nothing mutates the approved cache. Dependency-free (hand-rolled MCP stdio
+   JSON-RPC), so it stays offline and the whole request path is a unit-tested pure
+   function.
 
 2. **Living dashboard — publish `qe_board` to Pages on merge** ✅ *(shipped)*
    `qe_board` was a per-run CI artifact nobody opened. `.github/workflows/qe-board-pages.yml`
@@ -180,6 +185,16 @@ governed, no LLM in the loop unless a human asked for one.
    heuristic**, deterministic and offline (no LLM), honest about being a signal. On
    the real todomvc suite it already flags a genuine gap: TMVC-5/6 name
    `"Clear completed"` but their tests never assert it.
+
+**Wired into the gate.** The two new signals don't just print — they *decide*.
+`intent_coverage` feeds `gate.decide(intent_weak=…)`: a **weak/untested**
+requirement raises a 🟠 review signal (never red), beside the flaky-quarantine and
+reqdrift signals, and shows on `qe_board` as a sixth tile + a ranked directive. Only
+weak/untested escalate (partials are surfaced in the report, not gated) so the gate
+doesn't drown in noise. `qe_trends` is **deliberately not** a gate signal — it's
+longitudinal/dashboard data, not a per-PR "should this merge?" call — so it's
+exposed via MCP and the living board, not `gate.decide`. Both wired in the per-PR
+workflow (`klew-pr-gate.yml`) and the Pages board.
 
 ## Later phases (named, not yet built)
 
