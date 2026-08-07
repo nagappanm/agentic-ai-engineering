@@ -201,6 +201,60 @@ Don't re-drive the whole app every time. Given a goal, resolve what it needs
    the app solely to resolve the gaps. If `explore` is empty, do no browsing at
    all — the cache already covers the goal.
 
+### Coverage — knowing what the needs list MISSED (`coverage.py`)
+
+`plan_goal.py` only judges the names *you thought to list*. It cannot tell you the
+list was incomplete. Run `coverage.py` first — it reconciles three sources whose
+blind spots differ, and the diff names what genuinely requires a browser:
+
+| Source | How | Sees |
+| ------ | --- | ---- |
+| SOURCE | static scan of the app's markup (instant) | all states, incl. unrendered |
+| HARVEST | one `eval` sweep of the live DOM | this state only |
+| CACHE | `knowledge/<app>/selectors.json` | everything approved before |
+
+```bash
+# one round-trip harvests every interactive element (not one call per element):
+playwright-cli --raw eval "() => JSON.stringify(
+  [...document.querySelectorAll('button,a,input,textarea,select,[role]')].map(el => ({
+    role: el.getAttribute('role') || el.tagName.toLowerCase(),
+    name: (el.getAttribute('aria-label') || el.labels?.[0]?.innerText ||
+           el.placeholder || el.innerText || '').trim(),
+    tid:  el.getAttribute('data-automation-id') || el.getAttribute('data-testid') ||
+          el.getAttribute('data-test'),
+  })))" > harvest.json
+
+python .claude/skills/klew/scripts/coverage.py --app <app> \
+  --source 'app/**/*.html' --harvest harvest.json
+# make coverage APP=<app> SOURCE=<glob> HARVEST=harvest.json [TEST_ATTR=data-automation-id]
+```
+
+Every element lands in one of four classes:
+
+- **covered** — harvested *and* cached → reuse verbatim, **no LLM**.
+- **new** — live but uncached → you name it, then the normal approval gate.
+- **state_gated** — in the markup, absent from this DOM state → **the real explore
+  list**: you must drive the app into the state where it exists.
+- **cached_unseen** — cached but not present here → could not be confirmed.
+
+**The join is the subtle part.** A test attribute joins cleanly
+(`data-automation-id="x"` ↔ `getByTestId('x')`), but the selector policy *prefers*
+role+name locators, which carry no test id — so a test-id-only join reports cached
+elements as unexplored. `join_keys()` therefore indexes **every** key a locator
+exposes (test id *and* accessible name), and a source id with no id-match falls
+back to the slug↔name convention (`clear-completed` → "Clear completed"), reported
+as `match: "fuzzy"` so a human confirms rather than assumes. Deciding that the
+textbox named "New todo" *is* `todo.newInput` stays your judgment — the script only
+narrows what you must look at.
+
+It deliberately biases toward a **false gap over false coverage**: re-exploring a
+known element costs a little time; missing one ships a broken test.
+
+**What no diff can reach** — canvas/WebGL targets (no markup to scan; see the scene
+tier), routes never visited (scanning one page says nothing about `/checkout`),
+and anything behind auth or server state. Presence is also not uniqueness — that
+is `audit_selectors.py`'s job.
+
 ### Every goal run reports TWO outputs
 
 1. **Goal result — PASS / FAIL:** did the goal's journey actually work when

@@ -69,6 +69,11 @@ plan:            ## Cache-first: what does a goal need to explore? (NEEDS=name,n
 	@test -n "$(NEEDS)" || { echo "set NEEDS=<comma-separated logical names>"; exit 2; }
 	$(PY) $(SCRIPTS)/plan_goal.py --app "$(APP)" --needs "$(NEEDS)" $(if $(GOAL),--goal "$(GOAL)")
 
+coverage:        ## What is already known vs. still needs exploring (SOURCE=glob, HARVEST=json)
+	@test -n "$(SOURCE)$(HARVEST)" || { echo "set SOURCE=<markup glob> and/or HARVEST=<harvest.json>"; exit 2; }
+	$(PY) $(SCRIPTS)/coverage.py --app "$(APP)" $(if $(SOURCE),--source "$(SOURCE)") \
+		$(if $(HARVEST),--harvest "$(HARVEST)") $(if $(TEST_ATTR),--test-attr "$(TEST_ATTR)")
+
 record:          ## No-code: record a flow (headed, LOCAL) → CODEGEN file (needs URL + CODEGEN)
 	@test -n "$(URL)" || { echo "set URL=<app url>"; exit 2; }
 	@test -n "$(CODEGEN)" || { echo "set CODEGEN=<out.spec.ts>"; exit 2; }
