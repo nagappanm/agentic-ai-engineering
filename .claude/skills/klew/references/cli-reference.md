@@ -94,6 +94,30 @@ a cached scene entry.
 - **Test id:** `getByTestId('submit')` → resolves via `testIdAttribute`
 - **CSS (last resort):** `"#main > button.submit"`
 
+### `generate-locator` — normalizer, NOT a resolver
+
+```bash
+playwright-cli --raw generate-locator "internal:role=textbox[name=\"New todo\"i]"
+# → getByRole('textbox', { name: 'New todo' })
+```
+
+Useful for turning a target into canonical Playwright syntax you can paste
+straight into the cache. **It does not do klew's job**, and three verified
+behaviours matter:
+
+| You give it | It returns | Note |
+| ----------- | ---------- | ---- |
+| an internal role selector | `getByRole('textbox', { name: 'New todo' })` | canonicalised ✅ |
+| `[data-test=todo-list]` | `locator('[data-test=todo-list]')` | **no tier upgrade** — CSS in, CSS out |
+| `input` (3 elements match) | `locator('input')` | **no ambiguity warning** |
+| `button.does-not-exist` | error on stderr, **exit 0** | cannot be used as a script gate |
+
+So it never promotes a locator up the tier order, never tells you a target is
+ambiguous, and signals a zero-match only on stderr while still exiting 0. Keep
+using the selector policy to *choose* the tier and `audit_selectors.py` to prove
+uniqueness (1 match = good, 0 = stale, 2+ = ambiguous); use `generate-locator`
+only to format what you already decided.
+
 ## Tabs (multi-tab / active-tab scoping)
 
 ```bash
@@ -113,15 +137,63 @@ playwright-cli screenshot [ref] [--filename=f] [--hires]
 playwright-cli pdf [--filename=page.pdf]
 ```
 
+## Network mocking & offline (drive error states with no backend)
+
+```bash
+playwright-cli route "**/api/users" --status 500 --body "boom"   # mock a response
+playwright-cli route "**/api/*" --status 200 --body '{"ok":true}' --content-type application/json
+playwright-cli route-list                     # what is currently mocked
+playwright-cli unroute [pattern]              # remove one pattern, or all
+playwright-cli network-state-set offline      # / online
+```
+
+`route` flags: `--status`, `--body`, `--content-type`, `--header "N: v"`
+(repeatable), `--remove-header a,b`.
+
+This is how you reach the error/empty/slow states a happy-path exploration never
+sees — and those states are exactly where `coverage.py` reports `state_gated`
+elements (an error banner has no markup presence until the request fails).
+`network-state-set offline` flips `navigator.onLine` and fails requests, for
+offline-fallback UI.
+
+Inspect real traffic before mocking it:
+
+```bash
+playwright-cli requests                  # numbered list since page load
+playwright-cli request <n>               # full detail for one
+playwright-cli request-headers <n> | request-body <n>
+playwright-cli response-headers <n> | response-body <n>
+```
+
+## Dialogs, uploads & viewport
+
+```bash
+playwright-cli dialog-accept [prompt-text]   # accept alert/confirm/prompt
+playwright-cli dialog-dismiss
+playwright-cli upload <file> [file...]       # into the pending file chooser
+playwright-cli resize <w> <h>                # responsive-breakpoint checks
+```
+
+Arm the action that raises the dialog first, then accept/dismiss — a `confirm()`
+resolves `true` after `dialog-accept`.
+
 ## Storage / state
 
 ```bash
 playwright-cli cookie-list [--domain] | cookie-get <n> | cookie-set <n> <v>
 playwright-cli cookie-delete <n> | cookie-clear
 playwright-cli localstorage-list | localstorage-get <k> | localstorage-set <k> <v>
-playwright-cli sessionstorage-list | sessionstorage-get <k>
+playwright-cli localstorage-delete <k> | localstorage-clear
+playwright-cli sessionstorage-list | sessionstorage-get <k> | sessionstorage-set <k> <v>
+playwright-cli sessionstorage-delete <k> | sessionstorage-clear
 playwright-cli state-save [file] | state-load <file>
+playwright-cli delete-data                   # wipe all session data
 ```
+
+`state-save`/`state-load` are the fast path past a login: sign in once, save the
+storage state, then `state-load` it at the start of later sessions instead of
+re-driving the auth flow — the single biggest saving on a cold explore of an
+authenticated app.
 
 ## Debugging / monitoring
 
@@ -132,6 +204,68 @@ playwright-cli requests              # network requests
 playwright-cli tracing-start | tracing-stop
 playwright-cli video-start [file] | video-stop
 ```
+
+### Annotated video (near-free PR demo reels)
+
+```bash
+playwright-cli video-start demo.webm
+playwright-cli video-show-actions        # callout naming each action + highlighting its target
+playwright-cli video-chapter "Add a todo"   # chapter marker in the recording
+# ...drive the flow...
+playwright-cli video-hide-actions
+playwright-cli video-stop                # → ./demo.webm
+```
+
+`video-show-actions` annotates every subsequent CLI/MCP action on the page, so a
+recorded journey explains itself. It returns "Action annotations enabled" even
+with **no recording active** — it only sets a flag, so start the video first.
+
+### `run-code` — when no single command fits
+
+Takes a **JavaScript function that receives `page`**, not a bare snippet (a bare
+statement fails with `SyntaxError: Unexpected identifier 'page'`):
+
+```bash
+playwright-cli run-code "async (page) => {
+  await page.getByRole('textbox', { name: 'New todo' }).fill('x');
+  return await page.getByRole('textbox', { name: 'New todo' }).inputValue();
+}"
+playwright-cli run-code --filename=snippet.js
+```
+
+Use it for multi-step Playwright logic (assertions, waits, loops) in one
+round-trip; prefer the plain commands for anything they already cover.
+
+### Stepping a test run
+
+```bash
+playwright-cli pause-at "example.spec.ts:42"   # run up to <file>:<line> and pause
+playwright-cli resume | step-over
+```
+
+### Attaching to an existing browser
+
+```bash
+playwright-cli attach [name]        # drive an already-running Playwright browser
+playwright-cli attach --cdp <url>   # or connect over a CDP endpoint
+playwright-cli detach
+```
+
+Useful when a browser is already signed in — an alternative to `state-load` for
+getting past auth without re-driving it.
+
+### Held keys, wheel & provisioning
+
+```bash
+playwright-cli keydown Shift        # hold — for range-select, drag modifiers
+playwright-cli keyup Shift
+playwright-cli mousewheel <dx> <dy> # scroll-triggered UI (lazy lists, infinite scroll)
+playwright-cli install-browser [browser]   # sandbox/CI provisioning
+```
+
+`keydown`/`keyup` bracket other actions (the key stays held between them).
+`mousewheel` is a no-op on a page that cannot scroll — verify with
+`eval "() => window.scrollY"` rather than assuming it moved.
 
 ## Config (`.playwright/cli.config.json`)
 
