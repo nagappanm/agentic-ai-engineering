@@ -105,18 +105,23 @@ Useful for turning a target into canonical Playwright syntax you can paste
 straight into the cache. **It does not do klew's job**, and three verified
 behaviours matter:
 
-| You give it | It returns | Note |
-| ----------- | ---------- | ---- |
-| an internal role selector | `getByRole('textbox', { name: 'New todo' })` | canonicalised ✅ |
-| `[data-test=todo-list]` | `locator('[data-test=todo-list]')` | **no tier upgrade** — CSS in, CSS out |
-| `input` (3 elements match) | `locator('input')` | **no ambiguity warning** |
-| `button.does-not-exist` | error on stderr, **exit 0** | cannot be used as a script gate |
+| You give it | It returns | Exit | Note |
+| ----------- | ---------- | ---- | ---- |
+| an internal role selector | `getByRole('textbox', { name: 'New todo' })` | 0 | canonicalised ✅ |
+| `[data-test=todo-list]` | `locator('[data-test=todo-list]')` | 0 | **no tier upgrade** — CSS in, CSS out |
+| `input` (3 elements match) | `locator('input')` | **0** | **no ambiguity warning** |
+| `button.does-not-exist` | error on stderr | **1** | zero-match *is* detectable |
 
-So it never promotes a locator up the tier order, never tells you a target is
-ambiguous, and signals a zero-match only on stderr while still exiting 0. Keep
-using the selector policy to *choose* the tier and `audit_selectors.py` to prove
-uniqueness (1 match = good, 0 = stale, 2+ = ambiguous); use `generate-locator`
-only to format what you already decided.
+So it never promotes a locator up the tier order, and — the load-bearing gap —
+**never tells you a target is ambiguous**: 3 matching elements still exit 0 with
+no warning. A zero-match does exit non-zero, so it can gate "does this exist at
+all", but not "is this unique", which is the property that actually makes a
+locator durable. Keep using the selector policy to *choose* the tier and
+`audit_selectors.py` to prove uniqueness (1 match = good, 0 = stale, 2+ =
+ambiguous); use `generate-locator` only to format what you already decided.
+
+> Verified against **0.1.18**. On 0.1.17 a zero-match exited **0**, so a script
+> that gates on this needs the newer CLI — check `playwright-cli --version`.
 
 ## Tabs (multi-tab / active-tab scoping)
 
