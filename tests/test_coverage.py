@@ -157,3 +157,68 @@ def test_harvest_joins_on_test_id_when_name_is_missing():
 def test_unslug_maps_test_id_to_accessible_name():
     assert unslug("clear-completed") == "clear completed"
     assert unslug("add_to_cart") == "add to cart"
+
+
+# --- tier 2: alt text / title are user-facing ---------------------------------
+
+def test_alt_text_and_title_locators_yield_name_keys():
+    """An image-only link with alt="Home" is tier 2, not tier 3 — it must join."""
+    assert ("name", "home") in join_keys("getByAltText('Home')")
+    assert ("name", "close") in join_keys("getByTitle('Close')")
+
+
+def test_alt_text_cached_entry_is_covered_not_reported_new():
+    cache = {"selectors": {"nav.home": {"selector": "getByAltText('Home')", "tier": "label-text"}}}
+    harvest = [{"role": "link", "name": "Home", "tid": None}]
+    r = reconcile(cache, set(), harvest)
+    assert [c["logical"] for c in r["covered"]] == ["nav.home"]
+    assert r["new"] == []
+
+
+# --- configured testIdAttribute mismatch --------------------------------------
+
+def test_scan_source_by_attr_records_the_attribute_each_id_came_from():
+    html = '<i data-automation-id="a"><b data-test="b">'
+    assert coverage.scan_source_by_attr(html) == {"a": "data-automation-id", "b": "data-test"}
+
+
+def test_no_warning_when_every_id_matches_the_configured_attribute():
+    by_attr = {"a": "data-automation-id", "b": "data-automation-id"}
+    assert coverage.configured_attr_warnings(by_attr, "data-automation-id") == []
+
+
+def test_warns_when_id_found_under_a_different_attribute():
+    """getByTestId('b') would silently resolve nothing — the whole point."""
+    by_attr = {"a": "data-automation-id", "b": "data-test"}
+    warns = coverage.configured_attr_warnings(by_attr, "data-automation-id")
+    assert [w["tid"] for w in warns] == ["b"]
+    assert warns[0]["found_under"] == "data-test"
+    assert warns[0]["configured"] == "data-automation-id"
+
+
+def test_no_warning_when_no_attribute_is_configured():
+    """Nothing to contradict — we do not guess Playwright's default."""
+    assert coverage.configured_attr_warnings({"a": "data-test"}, None) == []
+
+
+def test_read_configured_attr_finds_nearest_config(tmp_path):
+    cfg = tmp_path / ".playwright" / "cli.config.json"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text('{"testIdAttribute": "data-automation-id"}')
+    nested = tmp_path / "a" / "b"
+    nested.mkdir(parents=True)
+    attr, path = coverage.read_configured_attr(nested)
+    assert attr == "data-automation-id"
+    assert path == cfg
+
+
+def test_read_configured_attr_returns_none_when_absent(tmp_path):
+    assert coverage.read_configured_attr(tmp_path) == (None, None)
+
+
+def test_read_configured_attr_survives_malformed_config(tmp_path):
+    cfg = tmp_path / ".playwright" / "cli.config.json"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text("{not json")
+    attr, path = coverage.read_configured_attr(tmp_path)
+    assert attr is None and path == cfg

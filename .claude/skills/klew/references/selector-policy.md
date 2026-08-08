@@ -8,7 +8,7 @@ user-facing** locator that **uniquely** matches within the active tab's root.
 | Tier | Form | Use when |
 |---|---|---|
 | 1. Role + name | `getByRole('button', { name: 'Submit' })` | Element has an ARIA role and an accessible name. **Default choice.** |
-| 2. Label / text | `getByLabel('Email')`, `getByPlaceholder('Search')`, `getByText('Sign in', { exact: true })` | Form fields with labels; unique visible text; role name not distinctive. |
+| 2. Label / text | `getByLabel('Email')`, `getByPlaceholder('Search')`, `getByText('Sign in', { exact: true })`, `getByAltText('Home')`, `getByTitle('Close')` | Form fields with labels; unique visible text; role name not distinctive. **`getByAltText`/`getByTitle` are user-facing too** — an image-only link with `alt="Home"` belongs here, not at tier 3. |
 | 3. Automation id | `getByTestId('submit')` → `[data-automation-id="submit"]` | Tiers 1–2 aren't unique/stable but the app exposes a stable test attribute. |
 | 4. CSS / structural | `#main > button.submit` | **Last resort.** Record why nothing above worked (no role, no label, no id). |
 | 5. Scene (canvas/WebGL) | `scene:sigma/label=Alice` | **Only when there is no DOM element at all** — the target is drawn inside a canvas/WebGL surface (e.g. a Sigma.js graph node). See "Scene tier" below. |
