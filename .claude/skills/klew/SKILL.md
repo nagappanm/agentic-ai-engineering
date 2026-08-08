@@ -217,7 +217,7 @@ blind spots differ, and the diff names what genuinely requires a browser:
 # one round-trip harvests every interactive element (not one call per element):
 playwright-cli --raw eval "() => JSON.stringify(
   [...document.querySelectorAll('button,a,input,textarea,select,[role]')].map(el => ({
-    role: el.getAttribute('role') || el.tagName.toLowerCase(),
+    role: el.getAttribute('role') || el.tagName.toLowerCase(),  // APPROXIMATE — see below
     name: (el.getAttribute('aria-label') || el.labels?.[0]?.innerText ||
            el.placeholder || el.innerText || '').trim(),
     tid:  el.getAttribute('data-automation-id') || el.getAttribute('data-testid') ||
@@ -228,6 +228,24 @@ python .claude/skills/klew/scripts/coverage.py --app <app> \
   --source 'app/**/*.html' --harvest harvest.json
 # make coverage APP=<app> SOURCE=<glob> HARVEST=harvest.json [TEST_ATTR=data-automation-id]
 ```
+
+**The harvest's `role` is an approximation — do not cache from it.** The snippet
+falls back to the tag name, but an implicit ARIA role derives from the tag *plus
+its attributes*, so the two disagree exactly where it matters:
+
+| HTML | the snippet reports | actual role |
+| ---- | ------------------- | ----------- |
+| `<input type="checkbox">` | `input` | **checkbox** |
+| `<input type="search">` | `input` | **searchbox** |
+| `<a href="…">` | `a` | **link** |
+
+Use it to find *candidates* and their test ids; take the **role from the
+accessibility tree** — `playwright-cli find --regex "button|textbox|link|checkbox"`
+— which is what `getByRole` matches against. (Verified: `getByRole('textbox',
+{ name: 'Password' })` resolves a `type="password"` input whose `role` attribute
+is `null`, so the a11y tree, not the DOM, is the authority.) Do not try to merge
+the two into one record — they disagree about what an element's "name" is, and
+the join is unreliable.
 
 Every element lands in one of four classes:
 
