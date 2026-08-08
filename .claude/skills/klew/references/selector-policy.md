@@ -103,6 +103,14 @@ the wrong element highlights):
 2. If still ambiguous, drop to the next tier (often the automation id).
 3. Record the ambiguity and the resolution in the app's knowledge `.md`.
 
+**`generate-locator` does not do this for you.** It formats a target into
+canonical Playwright syntax — useful for pasting into the cache — but verified
+against v0.1.17 it: returns CSS unchanged (**no tier upgrade**), stays silent
+when the target matches 2+ elements (**no ambiguity warning**), and **exits 0**
+on a zero-match, printing the error only to stderr. So it can neither choose the
+tier nor serve as this uniqueness check. Use it last, to format a locator you
+already chose and verified. Details in `cli-reference.md` §"`generate-locator`".
+
 ## Multi-tab / active-tab root scoping
 
 Selectors resolve within **one** tab. With several tabs open the same locator
