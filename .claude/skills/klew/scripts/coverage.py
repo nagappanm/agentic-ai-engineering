@@ -110,12 +110,61 @@ def join_keys(
     return keys
 
 
+def scan_source_by_attr(
+    text: str, test_attrs: tuple[str, ...] = DEFAULT_TEST_ATTRS
+) -> dict[str, str]:
+    """Map each discovered test id -> the attribute it was found under.
+
+    Discovery is deliberately multi-attribute (an app may be mid-migration, or
+    the caller may not know the convention). RESOLUTION is not: `getByTestId()`
+    honours exactly ONE `testIdAttribute` at runtime. Keeping the source attribute
+    lets `configured_attr_warnings()` catch the mismatch instead of shipping a
+    cached locator that silently resolves nothing.
+    """
+    found: dict[str, str] = {}
+    for attr in test_attrs:  # first attribute in order wins
+        for value in re.findall(re.escape(attr) + r'\s*=\s*["\']([^"\']+)["\']', text):
+            found.setdefault(value, attr)
+    return found
+
+
 def scan_source(text: str, test_attrs: tuple[str, ...] = DEFAULT_TEST_ATTRS) -> set[str]:
     """Test-attribute values present in the markup — including unrendered states."""
-    found: set[str] = set()
-    for attr in test_attrs:
-        found |= set(re.findall(re.escape(attr) + r'\s*=\s*["\']([^"\']+)["\']', text))
-    return found
+    return set(scan_source_by_attr(text, test_attrs))
+
+
+def read_configured_attr(start: Path | None = None) -> tuple[str | None, Path | None]:
+    """The `testIdAttribute` from the nearest `.playwright/cli.config.json`.
+
+    Searched upward from `start` (default: cwd). Returns (attribute, config path);
+    (None, None) when no config is found — Playwright's own default is
+    `data-testid`, but we do not assume it, because guessing wrong here produces
+    exactly the silent-non-resolution this check exists to prevent.
+    """
+    here = (start or Path.cwd()).resolve()
+    for d in [here, *here.parents]:
+        cfg = d / ".playwright" / "cli.config.json"
+        if cfg.is_file():
+            try:
+                return json.loads(cfg.read_text()).get("testIdAttribute"), cfg
+            except (OSError, json.JSONDecodeError):
+                return None, cfg
+    return None, None
+
+
+def configured_attr_warnings(by_attr: dict[str, str], configured: str | None) -> list[dict]:
+    """Ids discovered under an attribute `getByTestId()` will NOT resolve.
+
+    Empty when no attribute is configured (nothing to contradict) or everything
+    already matches.
+    """
+    if not configured:
+        return []
+    return [
+        {"tid": tid, "found_under": attr, "configured": configured}
+        for tid, attr in sorted(by_attr.items())
+        if attr != configured
+    ]
 
 
 def _harvest_keys(el: dict) -> set[tuple[str, str]]:
@@ -189,8 +238,9 @@ def reconcile(
     }
 
 
-def _read_sources(paths: list[str], test_attrs: tuple[str, ...]) -> set[str]:
-    ids: set[str] = set()
+def _read_sources(paths: list[str], test_attrs: tuple[str, ...]) -> dict[str, str]:
+    """Discovered test id -> the attribute it was found under."""
+    ids: dict[str, str] = {}
     for pattern in paths:
         p = Path(pattern)
         matches = [p] if p.is_file() else sorted(Path().glob(pattern))
@@ -198,7 +248,9 @@ def _read_sources(paths: list[str], test_attrs: tuple[str, ...]) -> set[str]:
             print(f"[coverage] warning: no file matched {pattern!r}", file=sys.stderr)
         for f in matches:
             try:
-                ids |= scan_source(f.read_text(errors="ignore"), test_attrs)
+                found = scan_source_by_attr(f.read_text(errors="ignore"), test_attrs)
+                for tid, attr in found.items():
+                    ids.setdefault(tid, attr)
             except OSError as exc:
                 print(f"[coverage] warning: {f}: {exc}", file=sys.stderr)
     return ids
@@ -218,6 +270,11 @@ def main() -> None:
         "--test-attr", action="append", default=[], metavar="ATTR",
         help=f"test attribute to scan; repeatable (default: {', '.join(DEFAULT_TEST_ATTRS)})",
     )
+    ap.add_argument(
+        "--test-id-attribute", metavar="ATTR",
+        help="the attribute getByTestId() resolves; default: read from "
+             ".playwright/cli.config.json",
+    )
     ap.add_argument("--json", action="store_true", help="JSON only, no human summary")
     args = ap.parse_args()
 
@@ -226,16 +283,27 @@ def main() -> None:
 
     attrs = tuple(args.test_attr) or DEFAULT_TEST_ATTRS
     cache = load_cache(args.app)
-    source_ids = _read_sources(args.source, attrs) if args.source else set()
+    by_attr = _read_sources(args.source, attrs) if args.source else {}
+    source_ids = set(by_attr)
     harvest = json.loads(Path(args.harvest).read_text()) if args.harvest else []
     if isinstance(harvest, str):  # `--raw eval` returns a JSON string
         harvest = json.loads(harvest)
+
+    configured, cfg_path = (args.test_id_attribute, None)
+    if not configured:
+        configured, cfg_path = read_configured_attr()
+    attr_warnings = configured_attr_warnings(by_attr, configured)
 
     result = reconcile(cache, source_ids, harvest, attrs)
     result = {
         "app": args.app,
         "checked_at": today(),
         "test_attributes": list(attrs),
+        "test_id_attribute": configured,
+        "test_id_attribute_source": (
+            str(cfg_path) if cfg_path else ("--test-id-attribute" if configured else None)
+        ),
+        "attribute_mismatches": attr_warnings,
         "summary": {
             "source": len(source_ids),
             "harvest": len(harvest),
@@ -244,6 +312,7 @@ def main() -> None:
             "new": len(result["new"]),
             "state_gated": len(result["state_gated"]),
             "cached_unseen": len(result["cached_unseen"]),
+            "attribute_mismatches": len(attr_warnings),
         },
         **result,
     }
@@ -254,9 +323,21 @@ def main() -> None:
     s = result["summary"]
     out = sys.stderr
     print(
-        f"[coverage] source {s['source']} · harvest {s['harvest']} · cached {s['cached']}",
+        f"[coverage] source {s['source']} · harvest {s['harvest']} · cached {s['cached']}"
+        + (f" · testIdAttribute={configured}" if configured else " · testIdAttribute=(unset)"),
         file=out,
     )
+    if attr_warnings:
+        print(
+            f"  ⚠ {len(attr_warnings)} id(s) found under a DIFFERENT attribute than "
+            f"getByTestId() resolves — a cached getByTestId(...) would match nothing:",
+            file=out,
+        )
+        for w in attr_warnings:
+            print(
+                f"      {w['tid']:<24} found under {w['found_under']} ≠ {w['configured']}",
+                file=out,
+            )
     print(f"  covered      {s['covered']:>3}  reuse verbatim, no exploration", file=out)
     print(f"  new          {s['new']:>3}  live but uncached — name + approve", file=out)
     for e in result["new"]:

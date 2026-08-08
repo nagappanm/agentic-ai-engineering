@@ -250,6 +250,22 @@ narrows what you must look at.
 It deliberately biases toward a **false gap over false coverage**: re-exploring a
 known element costs a little time; missing one ships a broken test.
 
+**Discovery is multi-attribute; resolution is not.** The scan looks for
+`data-automation-id`, `data-testid` and `data-test`, but `getByTestId()` honours
+exactly **one** `testIdAttribute` at runtime. So an id discovered under a
+different attribute would cache a locator that silently matches nothing.
+`coverage.py` reads the nearest `.playwright/cli.config.json` (or takes
+`--test-id-attribute`) and warns:
+
+```
+⚠ 6 id(s) found under a DIFFERENT attribute than getByTestId() resolves:
+    todo-list    found under data-test ≠ data-automation-id
+```
+
+With no config found it reports `testIdAttribute=(unset)` and warns about
+nothing — it will not guess a default, since guessing wrong causes exactly the
+silent non-resolution the check exists to prevent.
+
 **What no diff can reach** — canvas/WebGL targets (no markup to scan; see the scene
 tier), routes never visited (scanning one page says nothing about `/checkout`),
 and anything behind auth or server state. Presence is also not uniqueness — that
