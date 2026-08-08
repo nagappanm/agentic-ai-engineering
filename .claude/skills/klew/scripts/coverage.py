@@ -191,12 +191,29 @@ def reconcile(
         for k in join_keys(entry.get("selector", ""), test_attrs):
             by_key.setdefault(k, name)
 
-    covered, new, seen_names = [], [], set()
+    # One entry per CACHED selector, not per harvest record. A single element can
+    # match on more than one key (its accessible name AND its test id), and a
+    # harvest may legitimately carry both — counting each would inflate "covered"
+    # past the number of cached selectors. `matched` keeps that information:
+    # >1 means several harvest records resolved to one cached name, which is
+    # either the same element seen twice or a genuinely AMBIGUOUS locator. The
+    # two are indistinguishable from a harvest alone, so it is reported, not judged
+    # (audit_selectors.py settles uniqueness against the live page).
+    by_logical: dict[str, dict] = {}
+    new, seen_names = [], set()
     for el in harvest:
         hit = next((by_key[k] for k in _harvest_keys(el) if k in by_key), None)
         if hit:
             seen_names.add(hit)
-            covered.append({"logical": hit, "name": el.get("name"), "tid": el.get("tid")})
+            entry = by_logical.setdefault(
+                hit, {"logical": hit, "name": el.get("name"), "tid": el.get("tid"), "matched": 0}
+            )
+            entry["matched"] += 1
+            # prefer a record that carries a test id — the stronger join evidence
+            if el.get("tid") and not entry.get("tid"):
+                entry["tid"] = el["tid"]
+            if el.get("name") and not entry.get("name"):
+                entry["name"] = el["name"]
         else:
             new.append(
                 {
@@ -226,6 +243,7 @@ def reconcile(
         )
 
     cached_unseen = sorted(n for n in selectors if n not in seen_names)
+    covered = sorted(by_logical.values(), key=lambda e: e["logical"])
 
     return {
         "covered": covered,
@@ -339,6 +357,13 @@ def main() -> None:
                 file=out,
             )
     print(f"  covered      {s['covered']:>3}  reuse verbatim, no exploration", file=out)
+    multi = [c for c in result["covered"] if c.get("matched", 1) > 1]
+    if multi:
+        print(
+            f"      ({len(multi)} matched several harvest records — same element seen "
+            "twice, or an ambiguous locator; audit_selectors.py settles it)",
+            file=out,
+        )
     print(f"  new          {s['new']:>3}  live but uncached — name + approve", file=out)
     for e in result["new"]:
         print(f"      {e['name'] or '(no accessible name)'} (tier={e['suggested_tier']})", file=out)

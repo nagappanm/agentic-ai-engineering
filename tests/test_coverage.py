@@ -216,6 +216,49 @@ def test_read_configured_attr_returns_none_when_absent(tmp_path):
     assert coverage.read_configured_attr(tmp_path) == (None, None)
 
 
+def test_covered_is_deduped_by_logical_name():
+    """One element carrying BOTH keys must not count as two covered selectors."""
+    cache = {"selectors": {"todo.list": {"selector": "getByTestId('todo-list')", "tier": "testid"}}}
+    harvest = [
+        {"role": "list", "name": "Todo list", "tid": "todo-list"},
+        {"role": None, "name": "", "tid": "todo-list"},   # same element, tid-only record
+    ]
+    r = reconcile(cache, set(), harvest)
+    assert len(r["covered"]) == 1
+    assert r["covered"][0]["logical"] == "todo.list"
+    assert r["covered"][0]["matched"] == 2
+
+
+def test_covered_never_exceeds_the_number_of_cached_selectors():
+    cache = make_cache()  # 3 selectors
+    harvest = [
+        {"role": "textbox", "name": "New todo", "tid": None},
+        {"role": None, "name": "New todo", "tid": None},
+        {"role": "list", "name": "", "tid": "todo-list"},
+    ]
+    r = reconcile(cache, set(), harvest)
+    assert len(r["covered"]) <= len(cache["selectors"])
+    assert {c["logical"] for c in r["covered"]} == {"todo.newInput", "todo.list"}
+
+
+def test_matched_count_is_one_for_a_single_record():
+    harvest = [{"role": "textbox", "name": "New todo", "tid": None}]
+    r = reconcile(make_cache(), set(), harvest)
+    assert r["covered"][0]["matched"] == 1
+
+
+def test_covered_entry_keeps_the_test_id_when_only_one_record_has_it():
+    cache = {
+        "selectors": {"a.b": {"selector": "getByRole('button', { name: 'Go' })", "tier": "role"}}
+    }
+    harvest = [
+        {"role": "button", "name": "Go", "tid": None},
+        {"role": "button", "name": "Go", "tid": "go-btn"},
+    ]
+    r = reconcile(cache, set(), harvest)
+    assert r["covered"][0]["tid"] == "go-btn"
+
+
 def test_read_configured_attr_survives_malformed_config(tmp_path):
     cfg = tmp_path / ".playwright" / "cli.config.json"
     cfg.parent.mkdir(parents=True)

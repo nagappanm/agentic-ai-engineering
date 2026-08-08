@@ -17,6 +17,34 @@ Never cache an ephemeral `ref` (e.g. `e15`) — it is valid only for one snapsho
 of one tab. Refs are fine for *acting during* exploration; the cached artifact
 must be a tier 1–5 locator.
 
+### Why the test id sits at tier 3, not tier 1
+
+A fair objection: Playwright's own docs call test ids **the most resilient** way
+to locate an element, because they are an explicit contract a developer knows not
+to rename. So why rank them below role and label?
+
+Because resilience and meaningfulness are different axes, and klew optimises for
+two things a test id cannot give:
+
+1. **Testing what the user actually experiences.** `getByRole('button', { name:
+   'Submit' })` fails when the button loses its accessible name — which is a real
+   defect. `getByTestId('submit')` passes right through it.
+2. **The accessibility signal is a byproduct of this ordering.** `a11y_flag` fires
+   precisely *because* an element could only be reached at tier 3–4. Promote the
+   test id to tier 1 and that signal disappears: you would never learn a control
+   has no accessible name, because you would never be forced down to find out.
+
+This is **not** "avoid test ids". The policy is *prefer role, fall back with a
+recorded reason* — and the caches show the fallback working as intended:
+
+    inventory.addBackpack  testid  "role+name 'Add to cart' ambiguous (6 matches)"
+    todo.list              testid  "getByRole('list') is a strict-mode violation (2 matches)"
+    todo.count             testid  "'N items left' is a role-less generic node"
+
+Each is a legitimate tier-3 cache entry. What the tier order buys is that the
+*reason* is recorded every time, so an a11y gap is never silently absorbed into a
+passing test.
+
 ## Scene tier (canvas / WebGL) — tier 5
 
 Tiers 1–4 all assume a DOM node exists. A `<canvas>` (2D or WebGL) is a single
