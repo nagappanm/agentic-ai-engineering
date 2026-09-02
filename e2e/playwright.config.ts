@@ -9,7 +9,8 @@ export default defineConfig({
   // self-contained: each ships its OWN app + playwright.config and is run from
   // its own directory (see e2e/sigma, e2e/scene). Exclude them here so the gate's
   // TodoMVC journey run doesn't pick them up and time out against the wrong app.
-  testIgnore: ["sigma/**", "scene/**"],
+  // parabank/ likewise ships its own app (Parasoft's public demo) + config.
+  testIgnore: ["sigma/**", "scene/**", "parabank/**"],
   reporter: [["list"]],
   use: {
     baseURL: process.env.BASE_URL ?? "http://127.0.0.1:8123",
