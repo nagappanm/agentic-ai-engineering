@@ -22,6 +22,9 @@ CLI       ?= playwright-cli
 # CANDIDATES resolved-selector batch to cache (for `make cache`)
 # POM_DEST   optional dir to copy the exported POM into (for `make handoff`)
 # MIN_CONF   export_pom --min-confidence threshold
+# HARVEST    live DOM sweep (make harvest) — joins a recorded test id to the
+#            cached role locator for the SAME element (make author / make coverage)
+# SESSION    named playwright-cli browser session for `make harvest`
 APP        ?= demo
 URL        ?=
 WORKDIR    ?= $(SKILL_DIR)/.work
@@ -44,7 +47,7 @@ TESTID_ATTR   ?= data-testid
 PW_EXECUTABLE ?=
 PW_SANDBOX    ?= true
 
-.PHONY: help install config plan record author author-nl open snapshot cache cache-delta cache-check knowledge-check knowledge-scaffold audit-plan audit-apply a11y pom handoff clean
+.PHONY: help install config plan coverage harvest record author author-nl open snapshot cache cache-delta cache-check knowledge-check knowledge-scaffold audit-plan audit-apply a11y pom handoff clean
 
 help:            ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -74,16 +77,29 @@ coverage:        ## What is already known vs. still needs exploring (SOURCE=glob
 	$(PY) $(SCRIPTS)/coverage.py --app "$(APP)" $(if $(SOURCE),--source "$(SOURCE)") \
 		$(if $(HARVEST),--harvest "$(HARVEST)") $(if $(TEST_ATTR),--test-attr "$(TEST_ATTR)")
 
+harvest:         ## Sweep the OPEN page's DOM into a harvest.json (role/name/test-id per element)
+	@test -n "$(HARVEST)" || { echo "set HARVEST=<out.json>"; exit 2; }
+	playwright-cli --raw eval "() => JSON.stringify([...document.querySelectorAll(\
+	  'button,a,input,textarea,select,[role]')].map(el => ({ \
+	  role: el.getAttribute('role') || el.tagName.toLowerCase(), \
+	  name: (el.getAttribute('aria-label') || el.labels?.[0]?.innerText || \
+	         el.placeholder || el.innerText || '').trim(), \
+	  tid: el.getAttribute('$(TESTID_ATTR)') })))" \
+	  $(if $(SESSION),-s "$(SESSION)") > "$(HARVEST)"
+	@echo "harvest -> $(HARVEST)  (feed to: make author HARVEST=$(HARVEST), or make coverage)"
+
 record:          ## No-code: record a flow (headed, LOCAL) → CODEGEN file (needs URL + CODEGEN)
 	@test -n "$(URL)" || { echo "set URL=<app url>"; exit 2; }
 	@test -n "$(CODEGEN)" || { echo "set CODEGEN=<out.spec.ts>"; exit 2; }
-	cd "$(REPO)/e2e" && npx playwright codegen "$(URL)" -o "$(CODEGEN)"
+	cd "$(REPO)/e2e" && npx playwright codegen "$(URL)" \
+	  --test-id-attribute "$(TESTID_ATTR)" -o "$(CODEGEN)"
 
 author:          ## Normalize a recording → klew journey + candidate selectors (CODEGEN, NAME)
 	@test -n "$(CODEGEN)" || { echo "set CODEGEN=<recording.spec.ts>"; exit 2; }
 	@test -n "$(NAME)" || { echo "set NAME=<journey slug>"; exit 2; }
 	$(PY) $(SCRIPTS)/author_journey.py --app "$(APP)" --codegen "$(CODEGEN)" \
-	  --name "$(NAME)" $(if $(REQ),--req "$(REQ)") --out-dir "$(OUTDIR)"
+	  --name "$(NAME)" $(if $(REQ),--req "$(REQ)") \
+	  $(if $(HARVEST),--harvest "$(HARVEST)") --out-dir "$(OUTDIR)"
 
 author-nl:       ## Render a natural-language journey PLAN → klew journey (PLAN, NAME opt.)
 	@test -n "$(PLAN)" || { echo "set PLAN=<plan.json>"; exit 2; }
