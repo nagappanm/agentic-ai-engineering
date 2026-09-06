@@ -1,0 +1,167 @@
+{
+  "app": "parabank",
+  "base_url": "https://parabank.parasoft.com/parabank/",
+  "updated": "2026-09-02",
+  "selectors": {
+    "login.username": {
+      "selector": "input[name=\"username\"]",
+      "tier": "css",
+      "page": "/index.htm",
+      "reason": "Unlabeled input; targeted by name attribute. a11y: no accessible name.",
+      "status": "approved",
+      "verified": "2026-07-21",
+      "confidence": 0.4,
+      "a11y_flag": true
+    },
+    "login.password": {
+      "selector": "input[name=\"password\"]",
+      "tier": "css",
+      "page": "/index.htm",
+      "reason": "Unlabeled input; targeted by name attribute. a11y: no accessible name.",
+      "status": "approved",
+      "verified": "2026-07-21",
+      "confidence": 0.4,
+      "a11y_flag": true
+    },
+    "login.submit": {
+      "selector": "getByRole('button', { name: 'Log In' })",
+      "tier": "role",
+      "page": "/index.htm",
+      "reason": "Clean role+name.",
+      "status": "approved",
+      "verified": "2026-07-21",
+      "confidence": 1.0,
+      "a11y_flag": false
+    },
+    "nav.transferFunds": {
+      "selector": "getByRole('link', { name: 'Transfer Funds' })",
+      "tier": "role",
+      "page": "/overview.htm",
+      "reason": "Global left-nav link; clean role+name.",
+      "status": "approved",
+      "verified": "2026-07-21",
+      "confidence": 1.0,
+      "a11y_flag": false
+    },
+    "transfer.amount": {
+      "selector": "#amount",
+      "tier": "css",
+      "page": "/transfer.htm",
+      "reason": "Unlabeled input, only 'Amount: $' text sibling. a11y: no accessible name.",
+      "status": "approved",
+      "verified": "2026-07-21",
+      "confidence": 0.4,
+      "a11y_flag": true
+    },
+    "transfer.fromAccount": {
+      "selector": "#fromAccountId",
+      "tier": "css",
+      "page": "/transfer.htm",
+      "reason": "Account combobox, no accessible name. a11y flag.",
+      "status": "approved",
+      "verified": "2026-07-21",
+      "confidence": 0.4,
+      "a11y_flag": true
+    },
+    "transfer.toAccount": {
+      "selector": "#toAccountId",
+      "tier": "css",
+      "page": "/transfer.htm",
+      "reason": "Account combobox, no accessible name. a11y flag.",
+      "status": "approved",
+      "verified": "2026-07-21",
+      "confidence": 0.4,
+      "a11y_flag": true
+    },
+    "transfer.submit": {
+      "selector": "getByRole('button', { name: 'Transfer' })",
+      "tier": "role",
+      "page": "/transfer.htm",
+      "reason": "Clean role+name.",
+      "status": "approved",
+      "verified": "2026-07-21",
+      "confidence": 1.0,
+      "a11y_flag": false
+    },
+    "transfer.confirmHeading": {
+      "selector": "getByRole('heading', { name: 'Transfer Complete!' })",
+      "tier": "role",
+      "page": "/transfer.htm",
+      "reason": "Confirmation heading; verification anchor.",
+      "status": "approved",
+      "verified": "2026-07-21",
+      "confidence": 1.0,
+      "a11y_flag": false
+    },
+    "transfer.confirmMessage": {
+      "selector": "getByText('has been transferred from account')",
+      "tier": "label-text",
+      "page": "/transfer.htm",
+      "reason": "Assertion target; partial text since amount/account vary.",
+      "status": "approved",
+      "verified": "2026-07-21",
+      "confidence": 0.9,
+      "a11y_flag": false
+    },
+    "nav.findTransactions": {
+      "selector": "getByRole('link', { name: 'Find Transactions' })",
+      "tier": "role",
+      "page": "/overview.htm",
+      "reason": "Account Services nav link; unique labelled link, global after login",
+      "status": "approved",
+      "verified": "2026-09-02",
+      "confidence": 1.0,
+      "a11y_flag": false
+    },
+    "nav.accountsOverview": {
+      "selector": "getByRole('link', { name: 'Accounts Overview' })",
+      "tier": "role",
+      "page": "/overview.htm",
+      "reason": "Account Services nav link; unique labelled link, global after login",
+      "status": "approved",
+      "verified": "2026-09-02",
+      "confidence": 1.0,
+      "a11y_flag": false
+    },
+    "findtrans.byAmount": {
+      "selector": "#findByAmount",
+      "tier": "css",
+      "page": "/findtrans.htm",
+      "reason": "Find-by-amount submit button has no accessible name; only #id available. a11y: no accessible name.",
+      "status": "approved",
+      "verified": "2026-09-02",
+      "confidence": 0.4,
+      "a11y_flag": true
+    },
+    "findtrans.date": {
+      "selector": "#transactionDate",
+      "tier": "css",
+      "page": "/findtrans.htm",
+      "reason": "Unlabeled date input, only 'Date:' sibling text. a11y: no accessible name.",
+      "status": "approved",
+      "verified": "2026-09-02",
+      "confidence": 0.4,
+      "a11y_flag": true
+    },
+    "findtrans.byDate": {
+      "selector": "#findByDate",
+      "tier": "css",
+      "page": "/findtrans.htm",
+      "reason": "Find-by-date submit button has no accessible name; only #id available. a11y: no accessible name.",
+      "status": "approved",
+      "verified": "2026-09-02",
+      "confidence": 0.4,
+      "a11y_flag": true
+    },
+    "transfer.activityLink": {
+      "selector": "getByText('See Account Activity for more')",
+      "tier": "label-text",
+      "page": "/transfer.htm",
+      "reason": "Post-transfer confirmation link text; stable copy, no role/name on the anchor",
+      "status": "approved",
+      "verified": "2026-09-02",
+      "confidence": 0.9,
+      "a11y_flag": false
+    }
+  }
+}
