@@ -1,0 +1,337 @@
+[
+  {
+    "id": "TC-001",
+    "title": "Valid credentials log the customer in and land on Accounts Overview",
+    "scenario": "positive",
+    "preconditions": [
+      "The ParaBank home page is reachable",
+      "The account test/test exists"
+    ],
+    "steps": [
+      "Open the ParaBank home page",
+      "Enter the username into the Customer Login username field",
+      "Enter the password into the Customer Login password field",
+      "Click Log In"
+    ],
+    "expectedResults": [
+      "The Accounts Overview page is displayed",
+      "The Account Services navigation is present"
+    ],
+    "risk": "high",
+    "traceability": ["PB-1"]
+  },
+  {
+    "id": "TC-002",
+    "title": "Invalid credentials keep the customer off Accounts Overview and show an error",
+    "scenario": "negative",
+    "preconditions": ["The ParaBank home page is reachable"],
+    "steps": [
+      "Open the ParaBank home page",
+      "Enter a username that does not exist",
+      "Enter any password",
+      "Click Log In"
+    ],
+    "expectedResults": [
+      "The Accounts Overview page is not displayed",
+      "An error is shown to the customer"
+    ],
+    "risk": "high",
+    "traceability": ["PB-2"],
+    "unknowns": [
+      "UNKNOWN: the exact error text and its placement on the page are not specified by PB-2 — clarify the expected message and where it renders before asserting on it"
+    ]
+  },
+  {
+    "id": "TC-003",
+    "title": "Submitting the login form with both fields empty is rejected",
+    "scenario": "edge",
+    "preconditions": ["The ParaBank home page is reachable"],
+    "steps": [
+      "Open the ParaBank home page",
+      "Leave the username and password fields empty",
+      "Click Log In"
+    ],
+    "expectedResults": [
+      "The Accounts Overview page is not displayed"
+    ],
+    "risk": "medium",
+    "traceability": ["PB-1", "PB-2"],
+    "unknowns": [
+      "UNKNOWN: whether an empty submission is blocked client-side or reaches the server is not specified — clarify the expected behaviour and message"
+    ]
+  },
+  {
+    "id": "TC-004",
+    "title": "The password is never echoed back in plain text during authentication",
+    "scenario": "negative",
+    "preconditions": ["The customer is on the ParaBank home page"],
+    "steps": [
+      "Open the ParaBank home page",
+      "Enter a username and password",
+      "Click Log In",
+      "Inspect the rendered page and the request URL for the submitted password"
+    ],
+    "expectedResults": [
+      "The password value does not appear in the rendered page",
+      "The password value does not appear in the page URL"
+    ],
+    "risk": "high",
+    "traceability": ["PB-1", "PB-2"],
+    "unknowns": [
+      "UNKNOWN: the banking constitution forbids echoing plain-text passwords, but PB-1 and PB-2 state no logging requirement — confirm this is in scope and whether server logs are also to be checked"
+    ]
+  },
+  {
+    "id": "TC-005",
+    "title": "A logged-in customer reaches Transfer Funds from Account Services",
+    "scenario": "positive",
+    "preconditions": ["The customer is logged in and on Accounts Overview"],
+    "steps": ["Click Transfer Funds in the Account Services navigation"],
+    "expectedResults": ["The Transfer Funds page is displayed"],
+    "risk": "high",
+    "traceability": ["PB-3"]
+  },
+  {
+    "id": "TC-006",
+    "title": "A transfer submitted with a valid amount and both accounts completes",
+    "scenario": "positive",
+    "preconditions": [
+      "The customer is logged in",
+      "The customer is on the Transfer Funds page",
+      "The customer owns at least one account"
+    ],
+    "steps": [
+      "Enter a positive amount within the available balance",
+      "Keep or select a source account",
+      "Keep or select a destination account",
+      "Click Transfer"
+    ],
+    "expectedResults": [
+      "A Transfer Complete! confirmation is displayed"
+    ],
+    "risk": "high",
+    "traceability": ["PB-4"]
+  },
+  {
+    "id": "TC-007",
+    "title": "The confirmation names the amount and both accounts involved",
+    "scenario": "positive",
+    "preconditions": ["A transfer has just been submitted successfully"],
+    "steps": ["Read the confirmation message on the Transfer Funds page"],
+    "expectedResults": [
+      "The heading Transfer Complete! is displayed",
+      "The message states the transferred amount",
+      "The message names a source account and a destination account"
+    ],
+    "risk": "high",
+    "traceability": ["PB-5"],
+    "unknowns": [
+      "UNKNOWN: the source and destination may be the same account when the customer owns only one — confirm whether the assertion must tolerate identical account numbers on both sides"
+    ]
+  },
+  {
+    "id": "TC-008",
+    "title": "The confirmation links through to the debited account's activity",
+    "scenario": "positive",
+    "preconditions": ["A transfer has just been submitted successfully"],
+    "steps": [
+      "Locate the account activity link on the confirmation",
+      "Click the link"
+    ],
+    "expectedResults": [
+      "The account activity for the debited account is displayed"
+    ],
+    "risk": "medium",
+    "traceability": ["PB-6"]
+  },
+  {
+    "id": "TC-009",
+    "title": "A transfer of exactly zero is rejected",
+    "scenario": "edge",
+    "preconditions": ["The customer is on the Transfer Funds page"],
+    "steps": ["Enter 0 as the amount", "Click Transfer"],
+    "expectedResults": ["The transfer does not complete"],
+    "risk": "high",
+    "traceability": ["PB-4"],
+    "unknowns": [
+      "UNKNOWN: the banking constitution requires zero to be treated as a boundary case, but PB-4 does not state the expected handling — clarify whether a zero transfer is rejected, and with what message"
+    ]
+  },
+  {
+    "id": "TC-010",
+    "title": "A transfer of a negative amount is rejected",
+    "scenario": "edge",
+    "preconditions": ["The customer is on the Transfer Funds page"],
+    "steps": ["Enter a negative amount", "Click Transfer"],
+    "expectedResults": ["The transfer does not complete"],
+    "risk": "high",
+    "traceability": ["PB-4"],
+    "unknowns": [
+      "UNKNOWN: PB-4 does not state how a negative amount is handled — clarify whether it is blocked client-side, rejected server-side, or normalised"
+    ]
+  },
+  {
+    "id": "TC-011",
+    "title": "A transfer of more than the available balance is rejected",
+    "scenario": "negative",
+    "preconditions": [
+      "The customer is on the Transfer Funds page",
+      "The available balance of the source account is known"
+    ],
+    "steps": [
+      "Enter an amount greater than the available balance",
+      "Click Transfer"
+    ],
+    "expectedResults": ["The transfer does not complete"],
+    "risk": "high",
+    "traceability": ["PB-4"],
+    "unknowns": [
+      "UNKNOWN: the requirement explicitly leaves insufficient-funds behaviour open — clarify whether the transfer is refused, allowed to overdraw, or queued, before this case can assert anything"
+    ]
+  },
+  {
+    "id": "TC-012",
+    "title": "A transfer amount with more than two decimal places is handled consistently",
+    "scenario": "edge",
+    "preconditions": ["The customer is on the Transfer Funds page"],
+    "steps": ["Enter an amount with three decimal places", "Click Transfer"],
+    "expectedResults": [
+      "The amount shown on the confirmation matches the amount the system actually moved"
+    ],
+    "risk": "medium",
+    "traceability": ["PB-4", "PB-5"],
+    "unknowns": [
+      "UNKNOWN: currency rounding is required as a boundary case by the banking constitution but no rounding rule is stated — clarify the rounding mode and the number of decimal places accepted"
+    ]
+  },
+  {
+    "id": "TC-013",
+    "title": "A completed money movement is recorded in an auditable trail",
+    "scenario": "positive",
+    "preconditions": ["A transfer has just been submitted successfully"],
+    "steps": [
+      "Open the account activity for the debited account",
+      "Locate the entry for the transfer just performed"
+    ],
+    "expectedResults": [
+      "An entry exists recording the transfer amount and the date"
+    ],
+    "risk": "high",
+    "traceability": ["PB-5", "PB-6"],
+    "unknowns": [
+      "UNKNOWN: the banking constitution requires an audit trail covering who, what, when and amount, but PB-5 and PB-6 do not state that the actor is recorded or visible — clarify what the audit record must contain and where it is inspected"
+    ]
+  },
+  {
+    "id": "TC-014",
+    "title": "A logged-in customer reaches Find Transactions from Account Services",
+    "scenario": "positive",
+    "preconditions": ["The customer is logged in"],
+    "steps": ["Click Find Transactions in the Account Services navigation"],
+    "expectedResults": ["The Find Transactions page is displayed"],
+    "risk": "medium",
+    "traceability": ["PB-7"]
+  },
+  {
+    "id": "TC-015",
+    "title": "Transactions can be found by amount",
+    "scenario": "positive",
+    "preconditions": [
+      "The customer is on the Find Transactions page",
+      "An account with at least one transaction of a known amount is selected"
+    ],
+    "steps": [
+      "Enter the known transaction amount in the amount field",
+      "Submit the find-by-amount search"
+    ],
+    "expectedResults": [
+      "Results for the selected account are displayed",
+      "Every returned transaction matches the searched amount"
+    ],
+    "risk": "medium",
+    "traceability": ["PB-8"]
+  },
+  {
+    "id": "TC-016",
+    "title": "Searching by an amount with no matching transactions returns an empty result",
+    "scenario": "edge",
+    "preconditions": ["The customer is on the Find Transactions page"],
+    "steps": [
+      "Enter an amount that matches no transaction on the selected account",
+      "Submit the find-by-amount search"
+    ],
+    "expectedResults": ["No transactions are listed"],
+    "risk": "low",
+    "traceability": ["PB-8"],
+    "unknowns": [
+      "UNKNOWN: PB-8 does not state what an empty result renders — clarify whether a message is shown or the table is simply empty"
+    ]
+  },
+  {
+    "id": "TC-017",
+    "title": "Transactions can be found by date",
+    "scenario": "positive",
+    "preconditions": [
+      "The customer is on the Find Transactions page",
+      "An account with at least one transaction on a known date is selected"
+    ],
+    "steps": [
+      "Enter the known transaction date in the date field",
+      "Submit the find-by-date search"
+    ],
+    "expectedResults": [
+      "Results for the selected account are displayed",
+      "Every returned transaction falls on the searched date"
+    ],
+    "risk": "medium",
+    "traceability": ["PB-9"],
+    "unknowns": [
+      "UNKNOWN: the accepted date format is not stated and the one observed value is ambiguous between DD-MM-YYYY and MM-DD-YYYY — clarify the format before any date can be entered deterministically"
+    ]
+  },
+  {
+    "id": "TC-018",
+    "title": "A date outside the account's transaction history returns an empty result",
+    "scenario": "edge",
+    "preconditions": ["The customer is on the Find Transactions page"],
+    "steps": [
+      "Enter a date on which the selected account has no transactions",
+      "Submit the find-by-date search"
+    ],
+    "expectedResults": ["No transactions are listed"],
+    "risk": "low",
+    "traceability": ["PB-9"],
+    "unknowns": [
+      "UNKNOWN: the date format is not established, so this case cannot be executed until TC-017's clarification is resolved"
+    ]
+  },
+  {
+    "id": "TC-019",
+    "title": "A customer returns to Accounts Overview from another Account Services page",
+    "scenario": "positive",
+    "preconditions": [
+      "The customer is logged in",
+      "The customer is on the Find Transactions page"
+    ],
+    "steps": ["Click Accounts Overview in the Account Services navigation"],
+    "expectedResults": ["The Accounts Overview page is displayed"],
+    "risk": "medium",
+    "traceability": ["PB-10"]
+  },
+  {
+    "id": "TC-020",
+    "title": "The session no longer grants access to account pages after logout",
+    "scenario": "negative",
+    "preconditions": ["The customer is logged in"],
+    "steps": [
+      "Log out of the application",
+      "Attempt to return to the Accounts Overview page"
+    ],
+    "expectedResults": ["Account pages are not served to the ended session"],
+    "risk": "high",
+    "traceability": ["PB-1", "PB-10"],
+    "unknowns": [
+      "UNKNOWN: the banking constitution requires session expiry on logout and after inactivity to be asserted explicitly, but no logout or timeout behaviour is stated in PB-1 to PB-10 — clarify the logout flow and the inactivity timeout, or confirm they are out of scope for this requirement"
+    ]
+  }
+]
