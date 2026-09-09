@@ -76,6 +76,32 @@ banking test app. Explored live to map the login → transfer-funds flow.
   flagged `a11y_flag`) — 8 of the app's 16 cached selectors. This is a
   consistent, app-wide pattern worth reporting to the app team as one defect,
   not eight.
+- **The account dropdowns are populated by AJAX — `toBeVisible()` is a FALSE
+  wait.** `#fromAccountId` and `#toAccountId` are present in the initial HTML and
+  only filled with `<option>`s after a later request. An assertion that the
+  `<select>` is visible therefore passes against an *empty* dropdown; submitting
+  then posts empty account ids and ParaBank answers with `Error!` / *"An internal
+  error has occurred and has been logged."* Wait on an option instead:
+
+  ```ts
+  await expect(transfer.fromAccount.locator("option").first()).toBeAttached();
+  ```
+
+  Use `toBeAttached`, not `toBeVisible` — an `<option>` inside a closed `<select>`
+  has no rendered box, so a visibility assertion would never succeed. A recorded
+  journey hides this bug by accident: `selectOption('12456')` implicitly waits for
+  that option to exist, so only hand-written navigation exposes the race.
+- **The exported Page Object goes stale when the cache changes.** `parabank.pom.ts`
+  is generated from `selectors.json`; approving new selectors does not update the
+  copy sitting in a test project, and a getter that is missing there comes back as
+  `undefined` rather than as a failing locator. Re-run `make handoff APP=parabank
+  POM_DEST=<dir>` after every approval. Nothing checks this automatically —
+  `knowledge_check` compares the note to the cache, not the POM to the cache.
+- **Credentials drift, not just account numbers.** The `test`/`test` demo login
+  stopped verifying between 2026-09-06 and 2026-09-09 (`Error!` / *"The username
+  and password could not be verified."* at `/login.htm`) and had to be
+  re-registered. Treat the login itself as environment state a run may have to
+  establish, not as a fixed given.
 - **`jsessionid` in URLs** makes raw URLs non-durable — rely on cached locators
   and in-app navigation, never on a captured deep link.
 
