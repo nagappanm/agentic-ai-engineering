@@ -52,6 +52,7 @@ never silent); omit the input entirely to opt out.
 | `qe_trends.py` | longitudinal health over the run-history window + gate-vs-human meta-eval |
 | `intent_coverage.py` | does the test assert the requirement's terms, not just cite its id? |
 | `qe_mcp.py` | MCP server exposing the stack's offline tools to any agent (dependency-free) |
+| `qe_evidence.py` | seal a tamper-evident proof pack per run (verdict + hashed inputs + sign-off ledger); `verify` recomputes it |
 | `justify.py` | `judge(ui_touched, yilsf_result)` — is a cache delta warranted by the PR + requirement? |
 | `bug_report.py` | `format_bug()` — YAML-front-matter + markdown repro an LLM can parse |
 | `tracker.py` | file the bug: **Jira REST** / **GitHub `gh`** / `--dry-run`; dedup + link-to-story |
@@ -207,10 +208,45 @@ Tools exposed (all read-only / analysis-only — nothing mutates the approved ca
 | `list_selectors` | read an app's approved selector cache |
 | `qe_trends` | longitudinal health + gate-vs-human meta-eval over the run-history window |
 | `intent_coverage` | grade whether each requirement's test asserts its terms |
+| `evidence_verify` | recompute a sealed evidence pack (or the chain) — proves a verdict wasn't edited |
 
 **Dependency-free** — it speaks MCP's stdio transport (newline-delimited JSON-RPC
 2.0) directly, no SDK, so it stays offline and the whole request path is the pure
 `handle()` function. Tests: `tests/test_qe_mcp.py`.
+
+## Sealed evidence (`qe_evidence.py`)
+
+*"In most agentic pipelines the system that generates the work also grades it — and
+every failure ships as a green checkmark."* (TestMu 2026, **Confidence ≠
+Correctness: The Agentic Validation Loop**.) The gate already fixes the *grading*
+half — journeys run, `testguard` grades, `gate.decide()` decides, and none of them
+is the agent that authored the tests. `qe_evidence` fixes the *proof* half: it binds
+a verdict to the exact inputs that produced it, so a green light is **provable**, not
+just asserted.
+
+Each run seals a pack (`.evidence/pack-<epoch_ms>-<sha8>.json`): the `verdict`, a
+`manifest` of every gate input with its sha256, a `prev_seal` linking to the prior
+pack (append-only chain), and a `seal` = sha256 over that whole body. Sign-offs are
+an **append-only ledger** on the seal — a separate, non-transferable human act
+(TestMu's *Who Actually Signs Off?*), never baked into the sealed body.
+
+```bash
+# independent post-verdict step (see the workflow) — chained to prior runs
+python pr_gate/qe_evidence.py seal --out .evidence --pr 42 --sha "$SHA" --branch main \
+  --verdict verdict.json --input journeys=results.json --input testguard=testguard.json \
+  --prev-chain
+
+python pr_gate/qe_evidence.py sign --pack .evidence/pack-*.json --by alice --decision approve
+python pr_gate/qe_evidence.py verify --pack .evidence/pack-*.json    # exit 20 on ANY tampering
+python pr_gate/qe_evidence.py verify-chain --dir .evidence           # no gaps in the ledger
+```
+
+Tampering is always caught, all offline with stdlib only: editing the verdict or a
+recorded input hash breaks the recomputed `seal`; editing an input file breaks its
+re-digest; a forged or transplanted sign-off fails its signature. Wired into
+`klew-pr-gate.yml` (sealed after the verdict, chain carried by the Actions cache,
+pack uploaded as an artifact) and exposed via `qe_mcp`'s `evidence_verify`.
+Deterministic, no LLM, no dependencies. Tests: `tests/test_qe_evidence.py`.
 
 MCP tools don't run inside a headless Action, so CI uses `gh` + Jira REST; an
 interactive Claude session can drive the same bug dict via the GitHub/Atlassian

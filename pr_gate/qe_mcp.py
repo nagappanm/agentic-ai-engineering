@@ -39,12 +39,20 @@ _KLEW_SCRIPTS = REPO / ".claude" / "skills" / "klew" / "scripts"
 sys.path.insert(0, str(_KLEW_SCRIPTS))
 
 try:  # works as `python -m pr_gate.qe_mcp` and `python pr_gate/qe_mcp.py`
-    from pr_gate import flakedoctor, intent_coverage, qe_board, qe_trends, reqdrift
+    from pr_gate import (
+        flakedoctor,
+        intent_coverage,
+        qe_board,
+        qe_evidence,
+        qe_trends,
+        reqdrift,
+    )
 except ModuleNotFoundError:  # pragma: no cover - path shim
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import flakedoctor  # type: ignore
     import intent_coverage  # type: ignore
     import qe_board  # type: ignore
+    import qe_evidence  # type: ignore
     import qe_trends  # type: ignore
     import reqdrift  # type: ignore
 
@@ -175,6 +183,21 @@ def _tool_plan_goal(args, root):
             "reuse": reuse, "explore": explore}
 
 
+def _tool_evidence_verify(args, root):
+    """Recompute a sealed evidence pack (or the whole chain) and report tampering."""
+    if args.get("dir"):
+        return qe_evidence.verify_chain(_p(root, args["dir"]))
+    pack_path = _p(root, args["pack"])
+    pack = json.loads(pack_path.read_text())
+    verify_root = _p(root, args["root"]) if args.get("root") else pack_path.parent
+    res = qe_evidence.verify_pack(pack, root=verify_root)
+    res["seal"] = pack.get("seal")
+    res["verdict"] = pack.get("verdict", {}).get("light")
+    res["signoffs"] = [{"by": s.get("by"), "decision": s.get("decision")}
+                       for s in pack.get("signoffs", [])]
+    return res
+
+
 def _tool_list_selectors(args, root):
     cache = _common.load_cache(args["app"])
     return {"app": args["app"], "base_url": cache.get("base_url"),
@@ -263,6 +286,17 @@ TOOLS = {
             "requirements": {"type": "string"},
             "tests": {"type": "array", "items": {"type": "string"},
                       "description": "spec globs (default ['e2e/*.spec.ts'])"}}},
+    ),
+    "evidence_verify": (
+        _tool_evidence_verify,
+        "Recompute a sealed gate evidence pack (or the whole append-only chain) and "
+        "report any tampering: seal integrity, unchanged inputs, valid sign-offs. "
+        "Read-only — proves a green light was produced by exactly these inputs.",
+        {"type": "object", "properties": {
+            "pack": {"type": "string", "description": "path to one pack-*.json"},
+            "root": {"type": "string", "description": "dir the pack's inputs resolve against"},
+            "dir": {"type": "string",
+                    "description": "verify the whole chain in this .evidence dir instead"}}},
     ),
 }
 

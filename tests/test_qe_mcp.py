@@ -42,7 +42,7 @@ def test_tools_list_has_every_stack_tool():
     names = {t["name"] for t in r["result"]["tools"]}
     assert names == {"reqdrift_check", "flakedoctor_triage", "a11y_audit",
                      "qe_board_model", "plan_goal", "list_selectors",
-                     "qe_trends", "intent_coverage"}
+                     "qe_trends", "intent_coverage", "evidence_verify"}
     # every tool advertises an input schema
     assert all("inputSchema" in t for t in r["result"]["tools"])
 
@@ -124,6 +124,28 @@ def test_qe_trends_tool_over_explicit_runs(tmp_path):
     runs = [run("failed", 1), run("failed", 2), run("passed", 3), run("passed", 4)]
     p = _payload(_call("qe_trends", {"runs": runs}))
     assert p["runs"] == 4 and p["summary"]["trend"] == "improving"
+
+
+def test_evidence_verify_tool_confirms_a_sealed_pack(tmp_path):
+    from pr_gate import qe_evidence as ev
+    results = tmp_path / "results.json"
+    results.write_text('{"suites": []}')
+    manifest = ev.build_manifest({"journeys": str(results)})
+    pack = ev.build_pack({"light": "green"}, manifest, meta={"app": "x", "created": 1})
+    (tmp_path / "pack-1-abc.json").write_text(json.dumps(pack))
+    r = qe_mcp.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                       "params": {"name": "evidence_verify",
+                                  "arguments": {"pack": "pack-1-abc.json"}}}, tmp_path)
+    p = json.loads(r["result"]["content"][0]["text"])
+    assert p["ok"] is True and p["verdict"] == "green"
+
+    # tamper the sealed body → the tool reports it, still as a normal result
+    pack["verdict"]["light"] = "red"
+    (tmp_path / "pack-1-abc.json").write_text(json.dumps(pack))
+    r2 = qe_mcp.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                        "params": {"name": "evidence_verify",
+                                   "arguments": {"pack": "pack-1-abc.json"}}}, tmp_path)
+    assert json.loads(r2["result"]["content"][0]["text"])["ok"] is False
 
 
 def test_tool_error_is_surfaced_as_iserror():

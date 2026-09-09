@@ -26,6 +26,7 @@ data/
 
 # pr_gate CI run artifacts + flakedoctor run-history window (regenerated per run)
 .ci/history/
+.evidence/
 /results.json
 /testguard.json
 /verdict.json
