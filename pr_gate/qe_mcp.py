@@ -189,7 +189,9 @@ def _tool_evidence_verify(args, root):
         return qe_evidence.verify_chain(_p(root, args["dir"]))
     pack_path = _p(root, args["pack"])
     pack = json.loads(pack_path.read_text())
-    verify_root = _p(root, args["root"]) if args.get("root") else pack_path.parent
+    # Inputs are recorded workspace-relative at seal time, so resolve them against
+    # the server root by default (not the pack's own folder).
+    verify_root = _p(root, args["root"]) if args.get("root") else root
     res = qe_evidence.verify_pack(pack, root=verify_root)
     res["seal"] = pack.get("seal")
     res["verdict"] = pack.get("verdict", {}).get("light")
