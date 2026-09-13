@@ -1,0 +1,34 @@
+{
+  "_comment": "Example incident log for incident_backtest against the todomvc suite. Replace with your real postmortems: id, title, the requirement ids the incident touched, optional named journeys, a one-line symptom, and a severity weight.",
+  "incidents": [
+    {
+      "id": "INC-2026-014",
+      "title": "Items-left count froze at 0 after adding items",
+      "requirements": ["TMVC-1", "TMVC-2"],
+      "symptom": "the items left count did not reflect newly added items",
+      "severity": 3
+    },
+    {
+      "id": "INC-2026-021",
+      "title": "Clear completed button never appeared after completing a todo",
+      "requirements": ["TMVC-5"],
+      "symptom": "completing an item did not reveal the clear completed control",
+      "severity": 2
+    },
+    {
+      "id": "INC-2026-033",
+      "title": "Toggle-all left some items active",
+      "requirements": ["TMVC-9"],
+      "journeys": ["todomvc-journeys.spec.ts"],
+      "symptom": "marking all complete still left items counted as active",
+      "severity": 2
+    },
+    {
+      "id": "INC-2026-040",
+      "title": "Todos vanished after a page reload",
+      "requirements": ["TMVC-14"],
+      "symptom": "items were not persisted to local storage across a browser reload",
+      "severity": 4
+    }
+  ]
+}

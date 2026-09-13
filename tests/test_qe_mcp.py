@@ -42,7 +42,8 @@ def test_tools_list_has_every_stack_tool():
     names = {t["name"] for t in r["result"]["tools"]}
     assert names == {"reqdrift_check", "flakedoctor_triage", "a11y_audit",
                      "qe_board_model", "plan_goal", "list_selectors",
-                     "qe_trends", "intent_coverage", "evidence_verify", "assertion_scan"}
+                     "qe_trends", "intent_coverage", "evidence_verify", "assertion_scan",
+                     "incident_backtest"}
     # every tool advertises an input schema
     assert all("inputSchema" in t for t in r["result"]["tools"])
 
@@ -124,6 +125,13 @@ def test_qe_trends_tool_over_explicit_runs(tmp_path):
     runs = [run("failed", 1), run("failed", 2), run("passed", 3), run("passed", 4)]
     p = _payload(_call("qe_trends", {"runs": runs}))
     assert p["runs"] == 4 and p["summary"]["trend"] == "improving"
+
+
+def test_incident_backtest_tool_over_committed_example():
+    p = _payload(_call("incident_backtest", {
+        "incidents": "pr_gate/incidents.example.json", "tests": ["e2e/*.spec.ts"]}))
+    assert p["summary"]["incidents"] == 4
+    assert [b["id"] for b in p["blind_spots"]] == ["INC-2026-040"]
 
 
 def test_assertion_scan_tool_flags_a_disabled_test():

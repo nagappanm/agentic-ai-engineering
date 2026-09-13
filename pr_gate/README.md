@@ -55,6 +55,7 @@ never silent); omit the input entirely to opt out.
 | `qe_mcp.py` | MCP server exposing the stack's offline tools to any agent (dependency-free) |
 | `qe_evidence.py` | seal a tamper-evident proof pack per run (verdict + hashed inputs + sign-off ledger); `verify` recomputes it |
 | `assertion_guard.py` | scan the PR diff for test erosion — disabled/trivialised tests, removed or softened assertions (🟠 review) |
+| `incident_backtest.py` | backwards scoring — rank the suite by which real past incidents it would have caught; surfaces blind spots |
 | `justify.py` | `judge(ui_touched, yilsf_result)` — is a cache delta warranted by the PR + requirement? |
 | `bug_report.py` | `format_bug()` — YAML-front-matter + markdown repro an LLM can parse |
 | `tracker.py` | file the bug: **Jira REST** / **GitHub `gh`** / `--dry-run`; dedup + link-to-story |
@@ -212,6 +213,7 @@ Tools exposed (all read-only / analysis-only — nothing mutates the approved ca
 | `intent_coverage` | grade whether each requirement's test asserts its terms |
 | `evidence_verify` | recompute a sealed evidence pack (or the chain) — proves a verdict wasn't edited |
 | `assertion_scan` | scan a PR diff for test erosion (disabled/trivialised/softened tests) |
+| `incident_backtest` | backwards scoring — which real incidents the suite would have caught + blind spots |
 
 **Dependency-free** — it speaks MCP's stdio transport (newline-delimited JSON-RPC
 2.0) directly, no SDK, so it stays offline and the whole request path is the pure
@@ -278,6 +280,34 @@ value change like `toBe(1)`→`toBe(2)` does *not* fire), so a human reads the f
 line rather than the gate auto-filing a bug. Feeds `gate.decide(assertion_findings=…)`
 and exposed via `qe_mcp`'s `assertion_scan`. No LLM, no deps. Tests:
 `tests/test_assertion_guard.py`.
+
+## Backwards scoring (`incident_backtest.py`)
+
+A suite's worth isn't its test count or coverage % — it's whether it would have
+caught the failures that actually hurt you (TestMu 2026, *Backwards Scoring: Ranking
+Test Suites by Which Real Incidents They Would Have Caught*). `incident_backtest`
+scores the suite **backwards** from a log of real incidents: for each one, would a
+journey have caught it, and which incidents are still **blind spots**?
+
+```bash
+python pr_gate/incident_backtest.py --incidents pr_gate/incidents.example.json \
+  --tests 'e2e/*.spec.ts' [--json]
+```
+
+An incident log is JSON (`{id, title, requirements[], journeys[], symptom, severity}`
+— see `incidents.example.json`). An incident is **covered** by, most-reliable first:
+a requirement it touched being **traced** by a test (`reqdrift.build_traceability`),
+a **named** test/requirement present in the suite, or a conservative **symptom ↔
+test-text overlap** (flagged as the heuristic it is). Output: incident **recall**
+(plain and severity-weighted), the journeys that catch the most real incidents
+(the backwards ranking), and the blind-spot list — the actionable gap. On the real
+todomvc suite it scores 3/4 (a sev-4 "todos vanished after reload" incident is a
+genuine blind spot — no journey asserts persistence).
+
+Like `qe_trends`, this is **longitudinal suite health, not a per-PR gate signal** (an
+uncovered incident is a backlog item, not a reason to block the PR in hand) — so it's
+exposed via `qe_mcp`'s `incident_backtest` and reporting, **not** wired into
+`gate.decide`. Deterministic, offline, no deps. Tests: `tests/test_incident_backtest.py`.
 
 MCP tools don't run inside a headless Action, so CI uses `gh` + Jira REST; an
 interactive Claude session can drive the same bug dict via the GitHub/Atlassian

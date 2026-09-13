@@ -42,6 +42,7 @@ try:  # works as `python -m pr_gate.qe_mcp` and `python pr_gate/qe_mcp.py`
     from pr_gate import (
         assertion_guard,
         flakedoctor,
+        incident_backtest,
         intent_coverage,
         qe_board,
         qe_evidence,
@@ -52,6 +53,7 @@ except ModuleNotFoundError:  # pragma: no cover - path shim
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import assertion_guard  # type: ignore
     import flakedoctor  # type: ignore
+    import incident_backtest  # type: ignore
     import intent_coverage  # type: ignore
     import qe_board  # type: ignore
     import qe_evidence  # type: ignore
@@ -185,6 +187,14 @@ def _tool_plan_goal(args, root):
             "reuse": reuse, "explore": explore}
 
 
+def _tool_incident_backtest(args, root):
+    """Score the suite backwards from a real incident log: recall + blind spots."""
+    incidents = incident_backtest.load_incidents(_p(root, args["incidents"]).read_text())
+    globs = args.get("tests") or ["e2e/*.spec.ts"]
+    files = reqdrift._read_tests([str(_p(root, g)) for g in globs])
+    return incident_backtest.backtest(incidents, files)
+
+
 def _tool_assertion_scan(args, root):
     """Scan a unified diff for test erosion (disabled/trivialised/softened tests)."""
     if args.get("diff_path"):
@@ -297,6 +307,16 @@ TOOLS = {
         "strong/partial/weak/untested.",
         {"type": "object", "required": ["requirements"], "properties": {
             "requirements": {"type": "string"},
+            "tests": {"type": "array", "items": {"type": "string"},
+                      "description": "spec globs (default ['e2e/*.spec.ts'])"}}},
+    ),
+    "incident_backtest": (
+        _tool_incident_backtest,
+        "Backwards scoring: given a real incident log, which past incidents would the "
+        "journey suite have caught — incident recall, blind spots, and the journeys "
+        "that catch the most real incidents. Longitudinal suite health, not a gate.",
+        {"type": "object", "required": ["incidents"], "properties": {
+            "incidents": {"type": "string", "description": "path to an incident-log JSON"},
             "tests": {"type": "array", "items": {"type": "string"},
                       "description": "spec globs (default ['e2e/*.spec.ts'])"}}},
     ),
