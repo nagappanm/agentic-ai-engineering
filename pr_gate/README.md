@@ -30,8 +30,9 @@ in `pr-gate.config.json` (`threshold=70`, `green_score=85`).
 failing journey that flakedoctor classifies **flaky** is *quarantined* (🟠, no bug
 filed) instead of red — only genuine regressions gate red. A **drifted** or
 **removed-with-tests** requirement (vs the committed `reqdrift.json` baseline), and
-a **weak/untested-asserted** requirement (from `intent_coverage`), are each a 🟠
-review signal, never red. History for flakedoctor lives in `.ci/history/`
+a **weak/untested-asserted** requirement (from `intent_coverage`), and a
+**test-weakening diff** (from `assertion_guard` — `--assertion-guard assertion.json`),
+are each a 🟠 review signal, never red. History for flakedoctor lives in `.ci/history/`
 (`run_history.py`), carried across runs by the Actions cache.
 
 **Knowledge-note drift** (`--knowledge-status`, from `knowledge_check.py`): a stale
@@ -52,6 +53,9 @@ never silent); omit the input entirely to opt out.
 | `qe_trends.py` | longitudinal health over the run-history window + gate-vs-human meta-eval |
 | `intent_coverage.py` | does the test assert the requirement's terms, not just cite its id? |
 | `qe_mcp.py` | MCP server exposing the stack's offline tools to any agent (dependency-free) |
+| `qe_evidence.py` | seal a tamper-evident proof pack per run (verdict + hashed inputs + sign-off ledger); `verify` recomputes it |
+| `assertion_guard.py` | scan the PR diff for test erosion — disabled/trivialised tests, removed or softened assertions (🟠 review) |
+| `incident_backtest.py` | backwards scoring — rank the suite by which real past incidents it would have caught; surfaces blind spots |
 | `justify.py` | `judge(ui_touched, yilsf_result)` — is a cache delta warranted by the PR + requirement? |
 | `bug_report.py` | `format_bug()` — YAML-front-matter + markdown repro an LLM can parse |
 | `tracker.py` | file the bug: **Jira REST** / **GitHub `gh`** / `--dry-run`; dedup + link-to-story |
@@ -207,10 +211,103 @@ Tools exposed (all read-only / analysis-only — nothing mutates the approved ca
 | `list_selectors` | read an app's approved selector cache |
 | `qe_trends` | longitudinal health + gate-vs-human meta-eval over the run-history window |
 | `intent_coverage` | grade whether each requirement's test asserts its terms |
+| `evidence_verify` | recompute a sealed evidence pack (or the chain) — proves a verdict wasn't edited |
+| `assertion_scan` | scan a PR diff for test erosion (disabled/trivialised/softened tests) |
+| `incident_backtest` | backwards scoring — which real incidents the suite would have caught + blind spots |
 
 **Dependency-free** — it speaks MCP's stdio transport (newline-delimited JSON-RPC
 2.0) directly, no SDK, so it stays offline and the whole request path is the pure
 `handle()` function. Tests: `tests/test_qe_mcp.py`.
+
+## Sealed evidence (`qe_evidence.py`)
+
+*"In most agentic pipelines the system that generates the work also grades it — and
+every failure ships as a green checkmark."* (TestMu 2026, **Confidence ≠
+Correctness: The Agentic Validation Loop**.) The gate already fixes the *grading*
+half — journeys run, `testguard` grades, `gate.decide()` decides, and none of them
+is the agent that authored the tests. `qe_evidence` fixes the *proof* half: it binds
+a verdict to the exact inputs that produced it, so a green light is **provable**, not
+just asserted.
+
+Each run seals a pack (`.evidence/pack-<epoch_ms>-<sha8>.json`): the `verdict`, a
+`manifest` of every gate input with its sha256, a `prev_seal` linking to the prior
+pack (append-only chain), and a `seal` = sha256 over that whole body. Sign-offs are
+an **append-only ledger** on the seal — a separate, non-transferable human act
+(TestMu's *Who Actually Signs Off?*), never baked into the sealed body.
+
+```bash
+# independent post-verdict step (see the workflow) — chained to prior runs
+python pr_gate/qe_evidence.py seal --out .evidence --pr 42 --sha "$SHA" --branch main \
+  --verdict verdict.json --input journeys=results.json --input testguard=testguard.json \
+  --prev-chain
+
+python pr_gate/qe_evidence.py sign --pack .evidence/pack-*.json --by alice --decision approve
+python pr_gate/qe_evidence.py verify --pack .evidence/pack-*.json    # exit 20 on ANY tampering
+python pr_gate/qe_evidence.py verify-chain --dir .evidence           # no gaps in the ledger
+```
+
+Tampering is always caught, all offline with stdlib only: editing the verdict or a
+recorded input hash breaks the recomputed `seal`; editing an input file breaks its
+re-digest; a forged or transplanted sign-off fails its signature. Wired into
+`klew-pr-gate.yml` (sealed after the verdict, chain carried by the Actions cache,
+pack uploaded as an artifact) and exposed via `qe_mcp`'s `evidence_verify`.
+Deterministic, no LLM, no dependencies. Tests: `tests/test_qe_evidence.py`.
+
+## Test erosion (`assertion_guard.py`)
+
+`qe_evidence` proves the *verdict* wasn't edited; `assertion_guard` proves the
+*tests behind it* weren't quietly gutted. TestMu 2026's *Confidence ≠ Correctness*
+names the failure modes: agents that *"rewrite failing tests until they pass,"*
+*"verify mocks instead of code paths,"* and *"report success over systems they
+quietly broke."* It reads the **same PR diff the gate already computes**
+(`/tmp/pr.diff`) and compares what the change removed vs added per test file:
+
+| Finding | Smell |
+|---|---|
+| `test-disabled` | a `.skip` / `xit` / `@pytest.mark.skip` introduced — a disabled test can't fail |
+| `test-narrowed` | a `.only` introduced — in CI it silently stops every *other* test running |
+| `trivial-assertion` | an always-true check added (`expect(true)`, `expect(1).toBe(1)`, `assert True`) |
+| `assertions-removed` | net fewer concrete assertions after the change |
+| `matcher-softened` | `toBe`/`toHaveText`/`toEqual` swapped for `toBeTruthy`/`toBeDefined`/`anything` |
+| `mock-added-with-fewer-asserts` | a mock/stub added while assertions dropped — verify-the-mock smell |
+
+```bash
+python pr_gate/assertion_guard.py --diff /tmp/pr.diff --json    # {findings, summary}
+```
+
+Every finding is a **🟠 review** signal, never red — a deterministic heuristic (a
+value change like `toBe(1)`→`toBe(2)` does *not* fire), so a human reads the flagged
+line rather than the gate auto-filing a bug. Feeds `gate.decide(assertion_findings=…)`
+and exposed via `qe_mcp`'s `assertion_scan`. No LLM, no deps. Tests:
+`tests/test_assertion_guard.py`.
+
+## Backwards scoring (`incident_backtest.py`)
+
+A suite's worth isn't its test count or coverage % — it's whether it would have
+caught the failures that actually hurt you (TestMu 2026, *Backwards Scoring: Ranking
+Test Suites by Which Real Incidents They Would Have Caught*). `incident_backtest`
+scores the suite **backwards** from a log of real incidents: for each one, would a
+journey have caught it, and which incidents are still **blind spots**?
+
+```bash
+python pr_gate/incident_backtest.py --incidents pr_gate/incidents.example.json \
+  --tests 'e2e/*.spec.ts' [--json]
+```
+
+An incident log is JSON (`{id, title, requirements[], journeys[], symptom, severity}`
+— see `incidents.example.json`). An incident is **covered** by, most-reliable first:
+a requirement it touched being **traced** by a test (`reqdrift.build_traceability`),
+a **named** test/requirement present in the suite, or a conservative **symptom ↔
+test-text overlap** (flagged as the heuristic it is). Output: incident **recall**
+(plain and severity-weighted), the journeys that catch the most real incidents
+(the backwards ranking), and the blind-spot list — the actionable gap. On the real
+todomvc suite it scores 3/4 (a sev-4 "todos vanished after reload" incident is a
+genuine blind spot — no journey asserts persistence).
+
+Like `qe_trends`, this is **longitudinal suite health, not a per-PR gate signal** (an
+uncovered incident is a backlog item, not a reason to block the PR in hand) — so it's
+exposed via `qe_mcp`'s `incident_backtest` and reporting, **not** wired into
+`gate.decide`. Deterministic, offline, no deps. Tests: `tests/test_incident_backtest.py`.
 
 MCP tools don't run inside a headless Action, so CI uses `gh` + Jira REST; an
 interactive Claude session can drive the same bug dict via the GitHub/Atlassian

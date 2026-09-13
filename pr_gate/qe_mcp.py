@@ -39,12 +39,24 @@ _KLEW_SCRIPTS = REPO / ".claude" / "skills" / "klew" / "scripts"
 sys.path.insert(0, str(_KLEW_SCRIPTS))
 
 try:  # works as `python -m pr_gate.qe_mcp` and `python pr_gate/qe_mcp.py`
-    from pr_gate import flakedoctor, intent_coverage, qe_board, qe_trends, reqdrift
+    from pr_gate import (
+        assertion_guard,
+        flakedoctor,
+        incident_backtest,
+        intent_coverage,
+        qe_board,
+        qe_evidence,
+        qe_trends,
+        reqdrift,
+    )
 except ModuleNotFoundError:  # pragma: no cover - path shim
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import assertion_guard  # type: ignore
     import flakedoctor  # type: ignore
+    import incident_backtest  # type: ignore
     import intent_coverage  # type: ignore
     import qe_board  # type: ignore
+    import qe_evidence  # type: ignore
     import qe_trends  # type: ignore
     import reqdrift  # type: ignore
 
@@ -175,6 +187,40 @@ def _tool_plan_goal(args, root):
             "reuse": reuse, "explore": explore}
 
 
+def _tool_incident_backtest(args, root):
+    """Score the suite backwards from a real incident log: recall + blind spots."""
+    incidents = incident_backtest.load_incidents(_p(root, args["incidents"]).read_text())
+    globs = args.get("tests") or ["e2e/*.spec.ts"]
+    files = reqdrift._read_tests([str(_p(root, g)) for g in globs])
+    return incident_backtest.backtest(incidents, files)
+
+
+def _tool_assertion_scan(args, root):
+    """Scan a unified diff for test erosion (disabled/trivialised/softened tests)."""
+    if args.get("diff_path"):
+        diff_text = _p(root, args["diff_path"]).read_text()
+    else:
+        diff_text = args.get("diff", "")
+    return assertion_guard.scan_diff(diff_text)
+
+
+def _tool_evidence_verify(args, root):
+    """Recompute a sealed evidence pack (or the whole chain) and report tampering."""
+    if args.get("dir"):
+        return qe_evidence.verify_chain(_p(root, args["dir"]))
+    pack_path = _p(root, args["pack"])
+    pack = json.loads(pack_path.read_text())
+    # Inputs are recorded workspace-relative at seal time, so resolve them against
+    # the server root by default (not the pack's own folder).
+    verify_root = _p(root, args["root"]) if args.get("root") else root
+    res = qe_evidence.verify_pack(pack, root=verify_root)
+    res["seal"] = pack.get("seal")
+    res["verdict"] = pack.get("verdict", {}).get("light")
+    res["signoffs"] = [{"by": s.get("by"), "decision": s.get("decision")}
+                       for s in pack.get("signoffs", [])]
+    return res
+
+
 def _tool_list_selectors(args, root):
     cache = _common.load_cache(args["app"])
     return {"app": args["app"], "base_url": cache.get("base_url"),
@@ -263,6 +309,36 @@ TOOLS = {
             "requirements": {"type": "string"},
             "tests": {"type": "array", "items": {"type": "string"},
                       "description": "spec globs (default ['e2e/*.spec.ts'])"}}},
+    ),
+    "incident_backtest": (
+        _tool_incident_backtest,
+        "Backwards scoring: given a real incident log, which past incidents would the "
+        "journey suite have caught — incident recall, blind spots, and the journeys "
+        "that catch the most real incidents. Longitudinal suite health, not a gate.",
+        {"type": "object", "required": ["incidents"], "properties": {
+            "incidents": {"type": "string", "description": "path to an incident-log JSON"},
+            "tests": {"type": "array", "items": {"type": "string"},
+                      "description": "spec globs (default ['e2e/*.spec.ts'])"}}},
+    ),
+    "assertion_scan": (
+        _tool_assertion_scan,
+        "Scan a unified PR diff for test erosion: disabled/narrowed tests (.skip/.only), "
+        "removed or always-true assertions, concrete matchers softened to weak ones. "
+        "An orange review heuristic — catches 'rewrite the test until it passes'.",
+        {"type": "object", "properties": {
+            "diff_path": {"type": "string", "description": "path to a unified diff file"},
+            "diff": {"type": "string", "description": "unified diff text (alt to diff_path)"}}},
+    ),
+    "evidence_verify": (
+        _tool_evidence_verify,
+        "Recompute a sealed gate evidence pack (or the whole append-only chain) and "
+        "report any tampering: seal integrity, unchanged inputs, valid sign-offs. "
+        "Read-only — proves a green light was produced by exactly these inputs.",
+        {"type": "object", "properties": {
+            "pack": {"type": "string", "description": "path to one pack-*.json"},
+            "root": {"type": "string", "description": "dir the pack's inputs resolve against"},
+            "dir": {"type": "string",
+                    "description": "verify the whole chain in this .evidence dir instead"}}},
     ),
 }
 

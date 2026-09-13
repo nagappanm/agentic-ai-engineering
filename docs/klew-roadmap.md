@@ -147,9 +147,10 @@ human asked for one.
 
 1. **`qe-mcp` — the stack as an MCP server** ✅ *(shipped)*
    AURA ships a Sauce MCP server; Microsoft ships Playwright MCP; now we do too.
-   `pr_gate/qe_mcp.py` exposes **eight** governed, offline tools over MCP —
+   `pr_gate/qe_mcp.py` exposes **eleven** governed, offline tools over MCP —
    `reqdrift_check`, `flakedoctor_triage`, `a11y_audit`, `qe_board_model`,
-   `plan_goal`, `list_selectors`, `qe_trends`, `intent_coverage` — so **any** agent
+   `plan_goal`, `list_selectors`, `qe_trends`, `intent_coverage`, `evidence_verify`,
+   `assertion_scan`, `incident_backtest` — so **any** agent
    (Claude Code, Cursor, an IDE) can call *governed* QE. This is the sharpest answer
    to "why klew and not Microsoft's free agents?": it makes governed QE composable,
    not just another autonomous loop. All tools are read-only / analysis-only —
@@ -195,6 +196,62 @@ doesn't drown in noise. `qe_trends` is **deliberately not** a gate signal — it
 longitudinal/dashboard data, not a per-PR "should this merge?" call — so it's
 exposed via MCP and the living board, not `gate.decide`. Both wired in the per-PR
 workflow (`klew-pr-gate.yml`) and the Pages board.
+
+## Mined from TestMu Conference 2026 — the "evidence & trust" wave
+
+The 2026 field's loudest theme (whole Day-1 track: *Confidence ≠ Correctness*,
+*Evidence-Based QA*, *Who Actually Signs Off?*, *Architects of Trust*) is that in
+agentic pipelines **the system that generates the work also grades it, so every
+failure ships as a green checkmark** — and the fix everyone converged on is
+*evidence as a first-class, tamper-evident artifact*. Reading all ~80 sessions
+surfaced three genuinely-new bets; #1 is shipped, #2/#3 are queued.
+
+1. **`qe-evidence` — sealed, tamper-evident proof pack per run** ✅ *(shipped)*
+   The gate already had the hard half — an **independent** grader (journeys →
+   `testguard` → `gate.decide()`; none of them is the agent that wrote the tests).
+   What was missing was the *binding*: proof that the green light came from exactly
+   these inputs and wasn't edited after. `pr_gate/qe_evidence.py` seals each run into
+   `.evidence/pack-<epoch_ms>-<sha8>.json` — the verdict, a manifest of every gate
+   input hashed (sha256), a `prev_seal` chaining to the prior pack, and a `seal` over
+   the whole body — plus an **append-only sign-off ledger** (a separate,
+   non-transferable human act, per *Who Actually Signs Off?*). `verify` recomputes
+   everything offline and exits non-zero on **any** tampering: an edited verdict or
+   input-hash breaks the seal, an edited input file breaks its re-digest, a forged or
+   transplanted sign-off fails its signature. Wired into `klew-pr-gate.yml` as an
+   independent post-verdict step (chain carried by the Actions cache, pack uploaded as
+   an artifact; GREEN/RED record the automated gate's own decision in the ledger), and
+   exposed via `qe_mcp`'s `evidence_verify`. Deterministic, no LLM, stdlib only.
+
+2. **`incident-backtest` — rank the suite by which real incidents it'd have caught**
+   ✅ *(shipped)* — from *Backwards Scoring: Ranking Test Suites by Which Real Incidents
+   They Would Have Caught* + *Beyond Scoring*. `pr_gate/incident_backtest.py` scores the
+   suite **backwards** from a real incident log: per incident, would a journey have
+   caught it (requirement-trace → named-journey → a conservative symptom/test-text
+   overlap), yielding incident **recall** (plain + severity-weighted), a ranking of the
+   journeys that catch the most real incidents, and the **blind-spot** list — the
+   actionable gap. On the real todomvc suite it scores 3/4 (a sev-4 "todos vanished
+   after reload" incident is a true blind spot — nothing asserts persistence). A
+   different axis from `intent_coverage` (text-similarity): suite ↔ real incident. Like
+   `qe_trends` it's **longitudinal health, not a gate signal** (an uncovered incident is
+   a backlog item, not a reason to block the PR in hand), so it's exposed via MCP +
+   reporting, not `gate.decide`. Reuses `reqdrift`'s traceability; deterministic,
+   offline, no deps. Ships with `incidents.example.json`. Tests:
+   `tests/test_incident_backtest.py`.
+
+3. **`assertion-guard` — catch tests that pass by getting *weaker*, not by the code
+   getting *right*** ✅ *(shipped)* — the exact failure modes *Confidence ≠ Correctness*
+   documents: agents that *"rewrite failing tests until they pass,"* *"verify mocks
+   instead of code paths,"* and *"report success over systems they quietly broke."*
+   `pr_gate/assertion_guard.py` reads the **same PR diff the gate already computes** and
+   flags erosion per test file — a `.skip`/`.only`/`xit` introduced, net assertions
+   removed, an always-true assertion added (`expect(true)`, `assert True`), a concrete
+   matcher softened to a weak one (`toBe`→`toBeTruthy`), or a mock added while
+   assertions dropped. A deterministic heuristic (a value change like `toBe(1)`→`toBe(2)`
+   does *not* fire), so every finding is a **🟠 review** signal, never auto-red — wired
+   into `gate.decide(assertion_findings=…)` beside the other heuristics, sealed into the
+   evidence pack, and exposed via `qe_mcp`'s `assertion_scan`. Complements `qe_evidence`:
+   that proves the verdict is authentic, this proves the tests behind it weren't gutted.
+   Tests: `tests/test_assertion_guard.py` + gate-signal tests in `tests/test_pr_gate.py`.
 
 ## Later phases (named, not yet built)
 

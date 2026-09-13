@@ -51,12 +51,15 @@ jobs:
           (cd testguard && npm ci || npm install)
           (cd e2e && npx playwright install --with-deps chromium)
 
-      # Rolling run-history for flakedoctor: restore the most recent window (via the
-      # restore-keys prefix), append this run below, and save a fresh entry at post-job.
-      - name: Restore run-history (flakedoctor window)
+      # Rolling run-history for flakedoctor + the append-only evidence-pack chain:
+      # restore the most recent window (via the restore-keys prefix), append this
+      # run below, and save a fresh entry at post-job.
+      - name: Restore run-history + evidence chain
         uses: actions/cache@v4
         with:
-          path: .ci/history
+          path: |
+            .ci/history
+            .evidence
           key: klew-run-history-${{ github.run_id }}
           restore-keys: |
             klew-run-history-
@@ -154,6 +157,14 @@ jobs:
             echo "justified=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Assertion-erosion scan (did this PR weaken its tests?)
+        continue-on-error: true
+        run: |
+          # Reuse the PR diff computed above; flags disabled/trivialised/softened
+          # tests as an orange review signal. Never red — a heuristic a human checks.
+          python pr_gate/assertion_guard.py --diff /tmp/pr.diff --json \
+            > assertion.json || echo '{}' > assertion.json
+
       - name: Knowledge note fresh? (docs drift vs the selector cache)
         id: knowledge
         continue-on-error: true
@@ -176,6 +187,7 @@ jobs:
             --justified "${{ steps.cache.outputs.justified }}" \
             --knowledge-status "${{ steps.knowledge.outputs.status }}" \
             --flakedoctor flake.json --reqdrift drift.json --intent-coverage intent.json \
+            --assertion-guard assertion.json \
             --emit-bugs /tmp/bugs --pr "$PR" --base-url "$BASE_URL" \
             --json > verdict.json
           code=$?
@@ -183,6 +195,26 @@ jobs:
           echo "light=$light" >> "$GITHUB_OUTPUT"
           echo "code=$code" >> "$GITHUB_OUTPUT"
           cat verdict.json
+
+      # Seal a tamper-evident proof pack: bind the verdict to the exact inputs
+      # that produced it, chained to prior runs. An INDEPENDENT post-verdict step —
+      # not the agent that authored the tests — so the green light is provable,
+      # not just asserted. Verify later with `qe_evidence.py verify`.
+      - name: Seal evidence pack
+        if: always()
+        continue-on-error: true
+        run: |
+          python pr_gate/qe_evidence.py seal --out .evidence \
+            --pr "$PR" --sha "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --branch "${{ github.head_ref || github.ref_name }}" \
+            --run-id "${{ github.run_id }}" \
+            --verdict verdict.json \
+            --input journeys=results.json --input testguard=testguard.json \
+            --input flake=flake.json --input drift=drift.json \
+            --input a11y=a11y.json --input intent=intent.json \
+            --input assertion=assertion.json \
+            --prev-chain --quiet > /tmp/pack_path.txt || true
+          echo "PACK=$(cat /tmp/pack_path.txt)" >> "$GITHUB_ENV"
 
       - name: Generate QE board (one console — verdict + next moves)
         if: always()
@@ -209,7 +241,9 @@ jobs:
             drift.json
             a11y.json
             intent.json
+            assertion.json
             qe-board.html
+            .evidence/**
             e2e/test-results/**
 
       - name: 🔴 RED — file bug(s) + fail
@@ -223,7 +257,10 @@ jobs:
               --project "$JIRA_PROJECT" --repo "${{ github.repository }}" \
               ${STORY:+--story-key "$STORY"} || true
           done
-          gh pr comment "$PR" --body "🔴 klew PR gate: journey failure(s) — bug(s) filed. See the \`klew-pr-gate\` artifact for repro." || true
+          [ -n "$PACK" ] && python pr_gate/qe_evidence.py sign --pack "$PACK" \
+            --by "klew-pr-gate[bot]" --decision reject \
+            --note "automated gate: journey/grade failure — bug(s) filed" || true
+          gh pr comment "$PR" --body "🔴 klew PR gate: journey failure(s) — bug(s) filed. See the \`klew-pr-gate\` artifact for repro (sealed evidence pack included)." || true
           exit 1
 
       - name: 🟠 ORANGE — request review
@@ -236,5 +273,8 @@ jobs:
       - name: 🟢 GREEN — approve + auto-merge
         if: steps.gate.outputs.light == 'green'
         run: |
-          gh pr review "$PR" --approve --body "🟢 klew PR gate: all journeys pass, testguard clean." || true
+          [ -n "$PACK" ] && python pr_gate/qe_evidence.py sign --pack "$PACK" \
+            --by "klew-pr-gate[bot]" --decision approve \
+            --note "automated gate: all journeys pass, testguard clean" || true
+          gh pr review "$PR" --approve --body "🟢 klew PR gate: all journeys pass, testguard clean. Verdict sealed in the evidence pack (\`qe_evidence.py verify\`). A human merge countersigns this." || true
           gh pr merge "$PR" --auto --squash || true
