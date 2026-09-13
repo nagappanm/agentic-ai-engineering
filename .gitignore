@@ -33,6 +33,8 @@ data/
 /flake.json
 /drift.json
 /a11y.json
+/intent.json
+/assertion.json
 /qe-board.html
 
 # Scratch LinkedIn carousel assets (not part of the package)

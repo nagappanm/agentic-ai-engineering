@@ -30,8 +30,9 @@ in `pr-gate.config.json` (`threshold=70`, `green_score=85`).
 failing journey that flakedoctor classifies **flaky** is *quarantined* (🟠, no bug
 filed) instead of red — only genuine regressions gate red. A **drifted** or
 **removed-with-tests** requirement (vs the committed `reqdrift.json` baseline), and
-a **weak/untested-asserted** requirement (from `intent_coverage`), are each a 🟠
-review signal, never red. History for flakedoctor lives in `.ci/history/`
+a **weak/untested-asserted** requirement (from `intent_coverage`), and a
+**test-weakening diff** (from `assertion_guard` — `--assertion-guard assertion.json`),
+are each a 🟠 review signal, never red. History for flakedoctor lives in `.ci/history/`
 (`run_history.py`), carried across runs by the Actions cache.
 
 **Knowledge-note drift** (`--knowledge-status`, from `knowledge_check.py`): a stale
@@ -53,6 +54,7 @@ never silent); omit the input entirely to opt out.
 | `intent_coverage.py` | does the test assert the requirement's terms, not just cite its id? |
 | `qe_mcp.py` | MCP server exposing the stack's offline tools to any agent (dependency-free) |
 | `qe_evidence.py` | seal a tamper-evident proof pack per run (verdict + hashed inputs + sign-off ledger); `verify` recomputes it |
+| `assertion_guard.py` | scan the PR diff for test erosion — disabled/trivialised tests, removed or softened assertions (🟠 review) |
 | `justify.py` | `judge(ui_touched, yilsf_result)` — is a cache delta warranted by the PR + requirement? |
 | `bug_report.py` | `format_bug()` — YAML-front-matter + markdown repro an LLM can parse |
 | `tracker.py` | file the bug: **Jira REST** / **GitHub `gh`** / `--dry-run`; dedup + link-to-story |
@@ -209,6 +211,7 @@ Tools exposed (all read-only / analysis-only — nothing mutates the approved ca
 | `qe_trends` | longitudinal health + gate-vs-human meta-eval over the run-history window |
 | `intent_coverage` | grade whether each requirement's test asserts its terms |
 | `evidence_verify` | recompute a sealed evidence pack (or the chain) — proves a verdict wasn't edited |
+| `assertion_scan` | scan a PR diff for test erosion (disabled/trivialised/softened tests) |
 
 **Dependency-free** — it speaks MCP's stdio transport (newline-delimited JSON-RPC
 2.0) directly, no SDK, so it stays offline and the whole request path is the pure
@@ -247,6 +250,34 @@ re-digest; a forged or transplanted sign-off fails its signature. Wired into
 `klew-pr-gate.yml` (sealed after the verdict, chain carried by the Actions cache,
 pack uploaded as an artifact) and exposed via `qe_mcp`'s `evidence_verify`.
 Deterministic, no LLM, no dependencies. Tests: `tests/test_qe_evidence.py`.
+
+## Test erosion (`assertion_guard.py`)
+
+`qe_evidence` proves the *verdict* wasn't edited; `assertion_guard` proves the
+*tests behind it* weren't quietly gutted. TestMu 2026's *Confidence ≠ Correctness*
+names the failure modes: agents that *"rewrite failing tests until they pass,"*
+*"verify mocks instead of code paths,"* and *"report success over systems they
+quietly broke."* It reads the **same PR diff the gate already computes**
+(`/tmp/pr.diff`) and compares what the change removed vs added per test file:
+
+| Finding | Smell |
+|---|---|
+| `test-disabled` | a `.skip` / `xit` / `@pytest.mark.skip` introduced — a disabled test can't fail |
+| `test-narrowed` | a `.only` introduced — in CI it silently stops every *other* test running |
+| `trivial-assertion` | an always-true check added (`expect(true)`, `expect(1).toBe(1)`, `assert True`) |
+| `assertions-removed` | net fewer concrete assertions after the change |
+| `matcher-softened` | `toBe`/`toHaveText`/`toEqual` swapped for `toBeTruthy`/`toBeDefined`/`anything` |
+| `mock-added-with-fewer-asserts` | a mock/stub added while assertions dropped — verify-the-mock smell |
+
+```bash
+python pr_gate/assertion_guard.py --diff /tmp/pr.diff --json    # {findings, summary}
+```
+
+Every finding is a **🟠 review** signal, never red — a deterministic heuristic (a
+value change like `toBe(1)`→`toBe(2)` does *not* fire), so a human reads the flagged
+line rather than the gate auto-filing a bug. Feeds `gate.decide(assertion_findings=…)`
+and exposed via `qe_mcp`'s `assertion_scan`. No LLM, no deps. Tests:
+`tests/test_assertion_guard.py`.
 
 MCP tools don't run inside a headless Action, so CI uses `gh` + Jira REST; an
 interactive Claude session can drive the same bug dict via the GitHub/Atlassian

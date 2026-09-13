@@ -42,7 +42,7 @@ def test_tools_list_has_every_stack_tool():
     names = {t["name"] for t in r["result"]["tools"]}
     assert names == {"reqdrift_check", "flakedoctor_triage", "a11y_audit",
                      "qe_board_model", "plan_goal", "list_selectors",
-                     "qe_trends", "intent_coverage", "evidence_verify"}
+                     "qe_trends", "intent_coverage", "evidence_verify", "assertion_scan"}
     # every tool advertises an input schema
     assert all("inputSchema" in t for t in r["result"]["tools"])
 
@@ -124,6 +124,14 @@ def test_qe_trends_tool_over_explicit_runs(tmp_path):
     runs = [run("failed", 1), run("failed", 2), run("passed", 3), run("passed", 4)]
     p = _payload(_call("qe_trends", {"runs": runs}))
     assert p["runs"] == 4 and p["summary"]["trend"] == "improving"
+
+
+def test_assertion_scan_tool_flags_a_disabled_test():
+    diff = ("diff --git a/e2e/x.spec.ts b/e2e/x.spec.ts\n"
+            "--- a/e2e/x.spec.ts\n+++ b/e2e/x.spec.ts\n@@ -1 +1 @@\n"
+            "-  test('adds', async () => {\n+  test.skip('adds', async () => {\n")
+    p = _payload(_call("assertion_scan", {"diff": diff}))
+    assert any(f["kind"] == "test-disabled" for f in p["findings"])
 
 
 def test_evidence_verify_tool_confirms_a_sealed_pack(tmp_path):

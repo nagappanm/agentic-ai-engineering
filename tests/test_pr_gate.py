@@ -236,6 +236,48 @@ def test_red_beats_orange():
     assert v["light"] == "red"
 
 
+# ---- assertion_guard signal (test-erosion in the PR diff) ----
+
+
+def _af(*kinds):
+    return [{"file": "e2e/x.spec.ts", "kind": k, "severity": "orange", "detail": k}
+            for k in kinds]
+
+
+def test_assertion_findings_turn_green_to_orange():
+    v = gate.decide(
+        _journeys(10), _tg(mean=100), cache_update_needed=False, justified=None,
+        config=CONFIG, assertion_findings=_af("test-disabled", "assertions-removed"),
+    )
+    assert v["light"] == "orange"
+    assert any("assertion_guard" in r for r in v["reasons"])
+
+
+def test_assertion_findings_never_cause_red():
+    v = gate.decide(
+        _journeys(10), _tg(mean=100), cache_update_needed=False, justified=None,
+        config=CONFIG, assertion_findings=_af("test-narrowed"),
+    )
+    assert v["light"] != "red"
+
+
+def test_assertion_findings_do_not_downgrade_a_real_red():
+    v = gate.decide(
+        _journeys(9, 1), _tg(mean=100), cache_update_needed=False, justified=None,
+        config=CONFIG, assertion_findings=_af("assertions-removed"),
+    )
+    assert v["light"] == "red"
+    assert any("assertion_guard" in n for n in v.get("notes", []))
+
+
+def test_no_assertion_findings_stays_green():
+    v = gate.decide(
+        _journeys(10), _tg(mean=100), cache_update_needed=False, justified=None,
+        config=CONFIG, assertion_findings=[],
+    )
+    assert v["light"] == "green"
+
+
 # ---- playwright parsing ----
 
 

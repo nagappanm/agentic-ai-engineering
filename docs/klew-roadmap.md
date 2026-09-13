@@ -147,10 +147,10 @@ human asked for one.
 
 1. **`qe-mcp` — the stack as an MCP server** ✅ *(shipped)*
    AURA ships a Sauce MCP server; Microsoft ships Playwright MCP; now we do too.
-   `pr_gate/qe_mcp.py` exposes **nine** governed, offline tools over MCP —
+   `pr_gate/qe_mcp.py` exposes **ten** governed, offline tools over MCP —
    `reqdrift_check`, `flakedoctor_triage`, `a11y_audit`, `qe_board_model`,
-   `plan_goal`, `list_selectors`, `qe_trends`, `intent_coverage`, `evidence_verify`
-   — so **any** agent
+   `plan_goal`, `list_selectors`, `qe_trends`, `intent_coverage`, `evidence_verify`,
+   `assertion_scan` — so **any** agent
    (Claude Code, Cursor, an IDE) can call *governed* QE. This is the sharpest answer
    to "why klew and not Microsoft's free agents?": it makes governed QE composable,
    not just another autonomous loop. All tools are read-only / analysis-only —
@@ -230,13 +230,19 @@ surfaced three genuinely-new bets; #1 is shipped, #2/#3 are queued.
    from `intent_coverage` (text-similarity) — a different axis (suite ↔ incident).
 
 3. **`assertion-guard` — catch tests that pass by getting *weaker*, not by the code
-   getting *right*** *(queued)* — the exact failure modes *Confidence ≠ Correctness*
+   getting *right*** ✅ *(shipped)* — the exact failure modes *Confidence ≠ Correctness*
    documents: agents that *"rewrite failing tests until they pass,"* *"verify mocks
    instead of code paths,"* and *"report success over systems they quietly broke."*
-   A deterministic **diff** check that flags assertion erosion (a strict assertion
-   deleted or softened to `expect(true)`, a real call swapped for a mock, a slipped-in
-   `.skip`/`.only`) and raises 🟠/🔴. Plugs the precise hole the keynote calls the
-   root cause; complements `qe_evidence` (proves the tests behind a seal weren't gutted).
+   `pr_gate/assertion_guard.py` reads the **same PR diff the gate already computes** and
+   flags erosion per test file — a `.skip`/`.only`/`xit` introduced, net assertions
+   removed, an always-true assertion added (`expect(true)`, `assert True`), a concrete
+   matcher softened to a weak one (`toBe`→`toBeTruthy`), or a mock added while
+   assertions dropped. A deterministic heuristic (a value change like `toBe(1)`→`toBe(2)`
+   does *not* fire), so every finding is a **🟠 review** signal, never auto-red — wired
+   into `gate.decide(assertion_findings=…)` beside the other heuristics, sealed into the
+   evidence pack, and exposed via `qe_mcp`'s `assertion_scan`. Complements `qe_evidence`:
+   that proves the verdict is authentic, this proves the tests behind it weren't gutted.
+   Tests: `tests/test_assertion_guard.py` + gate-signal tests in `tests/test_pr_gate.py`.
 
 ## Later phases (named, not yet built)
 

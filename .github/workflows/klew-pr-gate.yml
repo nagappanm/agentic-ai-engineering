@@ -157,6 +157,14 @@ jobs:
             echo "justified=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Assertion-erosion scan (did this PR weaken its tests?)
+        continue-on-error: true
+        run: |
+          # Reuse the PR diff computed above; flags disabled/trivialised/softened
+          # tests as an orange review signal. Never red — a heuristic a human checks.
+          python pr_gate/assertion_guard.py --diff /tmp/pr.diff --json \
+            > assertion.json || echo '{}' > assertion.json
+
       - name: Knowledge note fresh? (docs drift vs the selector cache)
         id: knowledge
         continue-on-error: true
@@ -179,6 +187,7 @@ jobs:
             --justified "${{ steps.cache.outputs.justified }}" \
             --knowledge-status "${{ steps.knowledge.outputs.status }}" \
             --flakedoctor flake.json --reqdrift drift.json --intent-coverage intent.json \
+            --assertion-guard assertion.json \
             --emit-bugs /tmp/bugs --pr "$PR" --base-url "$BASE_URL" \
             --json > verdict.json
           code=$?
@@ -203,6 +212,7 @@ jobs:
             --input journeys=results.json --input testguard=testguard.json \
             --input flake=flake.json --input drift=drift.json \
             --input a11y=a11y.json --input intent=intent.json \
+            --input assertion=assertion.json \
             --prev-chain --quiet > /tmp/pack_path.txt || true
           echo "PACK=$(cat /tmp/pack_path.txt)" >> "$GITHUB_ENV"
 
@@ -231,6 +241,7 @@ jobs:
             drift.json
             a11y.json
             intent.json
+            assertion.json
             qe-board.html
             .evidence/**
             e2e/test-results/**

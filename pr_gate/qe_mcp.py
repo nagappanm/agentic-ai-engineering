@@ -40,6 +40,7 @@ sys.path.insert(0, str(_KLEW_SCRIPTS))
 
 try:  # works as `python -m pr_gate.qe_mcp` and `python pr_gate/qe_mcp.py`
     from pr_gate import (
+        assertion_guard,
         flakedoctor,
         intent_coverage,
         qe_board,
@@ -49,6 +50,7 @@ try:  # works as `python -m pr_gate.qe_mcp` and `python pr_gate/qe_mcp.py`
     )
 except ModuleNotFoundError:  # pragma: no cover - path shim
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import assertion_guard  # type: ignore
     import flakedoctor  # type: ignore
     import intent_coverage  # type: ignore
     import qe_board  # type: ignore
@@ -183,6 +185,15 @@ def _tool_plan_goal(args, root):
             "reuse": reuse, "explore": explore}
 
 
+def _tool_assertion_scan(args, root):
+    """Scan a unified diff for test erosion (disabled/trivialised/softened tests)."""
+    if args.get("diff_path"):
+        diff_text = _p(root, args["diff_path"]).read_text()
+    else:
+        diff_text = args.get("diff", "")
+    return assertion_guard.scan_diff(diff_text)
+
+
 def _tool_evidence_verify(args, root):
     """Recompute a sealed evidence pack (or the whole chain) and report tampering."""
     if args.get("dir"):
@@ -288,6 +299,15 @@ TOOLS = {
             "requirements": {"type": "string"},
             "tests": {"type": "array", "items": {"type": "string"},
                       "description": "spec globs (default ['e2e/*.spec.ts'])"}}},
+    ),
+    "assertion_scan": (
+        _tool_assertion_scan,
+        "Scan a unified PR diff for test erosion: disabled/narrowed tests (.skip/.only), "
+        "removed or always-true assertions, concrete matchers softened to weak ones. "
+        "An orange review heuristic — catches 'rewrite the test until it passes'.",
+        {"type": "object", "properties": {
+            "diff_path": {"type": "string", "description": "path to a unified diff file"},
+            "diff": {"type": "string", "description": "unified diff text (alt to diff_path)"}}},
     ),
     "evidence_verify": (
         _tool_evidence_verify,

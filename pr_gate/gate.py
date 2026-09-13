@@ -130,6 +130,7 @@ def decide(
     flaky_ids: set | list | None = None,
     reqdrift_stale: bool = False,
     intent_weak: set | list | None = None,
+    assertion_findings: list | None = None,
 ) -> dict:
     """Pure traffic-light decision. Returns {light, reasons, ...}. First match wins.
 
@@ -151,6 +152,11 @@ def decide(
     requirement's terms — from intent_coverage) is likewise a review signal:
     GREEN→ORANGE, never RED. A weakly-asserted requirement is a coverage gap to
     review, not a product defect.
+
+    `assertion_findings` (from assertion_guard — tests the PR diff weakened:
+    disabled/narrowed tests, removed or trivialised assertions, softened matchers)
+    is, like the other heuristics, a GREEN→ORANGE review signal, never RED: a human
+    looks at the flagged line rather than the gate auto-filing a bug.
     """
     green_score = config.get("green_score", 85)
     knowledge_drift = config.get("knowledge_drift", "orange")  # "orange" gates | "info" surfaces
@@ -161,6 +167,12 @@ def decide(
     intent_msg = (
         f"{len(intent_weak)} requirement(s) weakly asserted by their tests: "
         f"{', '.join(intent_weak)}" if intent_weak else None
+    )
+    assertion_findings = assertion_findings or []
+    assertion_msg = (
+        f"{len(assertion_findings)} test-weakening change(s) in this PR "
+        f"(assertion_guard): {', '.join(sorted({f['kind'] for f in assertion_findings}))}"
+        if assertion_findings else None
     )
     info_note = [knowledge_msg] if (knowledge_stale and knowledge_drift != "orange") else []
     reasons: list[str] = []
@@ -184,6 +196,8 @@ def decide(
             n.append(quarantine_msg)
         if intent_msg:
             n.append(intent_msg)
+        if assertion_msg:
+            n.append(assertion_msg)
         return n
 
     # ---- RED ---- (knowledge/req drift & flaky quarantine never cause red; noted)
@@ -210,6 +224,8 @@ def decide(
         reasons.append(drift_msg)
     if intent_msg:
         reasons.append(intent_msg)
+    if assertion_msg:
+        reasons.append(assertion_msg)
     if s["medium"]:
         reasons.append(f"{len(s['medium'])} medium-severity testguard finding(s)")
     if s["uncovered"]:
@@ -260,6 +276,10 @@ def main() -> None:
     ap.add_argument(
         "--intent-coverage", metavar="JSON",
         help="intent_coverage --json output; weak/untested requirements raise an orange signal",
+    )
+    ap.add_argument(
+        "--assertion-guard", metavar="JSON",
+        help="assertion_guard --json output; test-weakening diffs raise an orange review signal",
     )
     ap.add_argument("--config", default=None)
     ap.add_argument("--json", action="store_true", help="emit verdict JSON on stdout")
@@ -314,10 +334,13 @@ def main() -> None:
     ic = read_report(args.intent_coverage) if args.intent_coverage else None
     intent_weak = ([r["id"] for r in ic.get("rows", []) if r.get("grade") in ("weak", "untested")]
                    if ic else [])
+    # assertion_guard: tests this PR's diff weakened (disabled/trivialised) — orange.
+    aguard = read_report(args.assertion_guard) if args.assertion_guard else None
+    assertion_findings = aguard.get("findings", []) if aguard else []
 
     verdict = decide(journeys, tg, cache_update_needed, justified, config,
                      knowledge_stale, flaky_ids=flaky_ids, reqdrift_stale=reqdrift_stale,
-                     intent_weak=intent_weak)
+                     intent_weak=intent_weak, assertion_findings=assertion_findings)
     verdict["summary"] = {
         "journeys": len(journeys),
         "passed": sum(1 for j in journeys if j["status"] == "passed"),
