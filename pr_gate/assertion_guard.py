@@ -57,8 +57,10 @@ SOFT = re.compile(
     r"\b(toBeTruthy|toBeFalsy|toBeDefined|toBeUndefined|toBeNull|toBeNaN"
     r"|anything|objectContaining|assertTrue|assertIsNotNone)\b"
 )
-# Any assertion at all (to count net removals).
-ASSERT = re.compile(r"\b(expect|assert|assertEqual|assertTrue|assertRaises)\s*\(")
+# Any assertion at all (to count net removals) — keyword form, so it catches both
+# call style (`expect(...)`, `assertEqual(...)`) and the bare pytest `assert x == y`
+# statement. Word boundaries stop `assert` double-counting inside `assertEqual`.
+ASSERT = re.compile(r"\b(expect|assert|assertEqual|assertTrue|assertRaises)\b")
 # Tautologies that can never fail.
 TRIVIAL = re.compile(
     r"expect\(\s*(true|false|-?\d+(?:\.\d+)?|'[^']*'|\"[^\"]*\")\s*\)"
@@ -91,7 +93,9 @@ def _code_only(line: str) -> str:
     if stripped.startswith(("//", "#", "*", "/*")):
         return ""
     line = re.sub(r"/\*.*?\*/", "", line)
-    line = re.sub(r"#.*$", "", line)
+    # a `#` comment starts at line-start or after whitespace — so a TS private
+    # field (`this.#balance`) is preserved, while a Python `# comment` is trimmed.
+    line = re.sub(r"(^|\s)#.*$", r"\1", line)
     line = re.sub(r"(?<!:)//.*$", "", line)
     return line
 

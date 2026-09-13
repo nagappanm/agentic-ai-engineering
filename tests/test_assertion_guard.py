@@ -175,6 +175,29 @@ def test_brand_new_test_file_is_not_flagged_as_removal():
     assert ag.scan_diff(d)["findings"] == []
 
 
+def test_ts_private_field_is_not_eaten_by_comment_stripping():
+    # `#n` is a TS private field, not a comment — the `.toEqual` after it must count
+    d = _diff("e2e/a.spec.ts",
+              ["    expect(acct.#n).toEqual(5);"],
+              ["    expect(acct.value).toBeTruthy();"])
+    assert "matcher-softened" in _kinds(ag.scan_diff(d))
+
+
+def test_bare_pytest_assert_removal_is_counted():
+    d = _diff("tests/test_pay.py",
+              ["    assert charge == 49", "    assert status == 'ok'"],
+              ["    pass"])
+    f = ag.scan_diff(d)["findings"]
+    assert [x["kind"] for x in f] == ["assertions-removed"]
+    assert f[0]["detail"].startswith("2 net")
+
+
+def test_assertEqual_is_not_double_counted_as_assert():
+    d = _diff("tests/test_pay.py", ["    self.assertEqual(a, b)"], ["    pass"])
+    f = ag.scan_diff(d)["findings"]
+    assert f[0]["detail"].startswith("1 net")  # not 2
+
+
 def test_summary_counts_by_kind():
     # one file: skip + a dropped assertion
     d = _diff("e2e/todo.spec.ts",
