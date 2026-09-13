@@ -161,6 +161,53 @@ def test_chain_break_detected_when_a_pack_is_removed(tmp_path):
     assert not res["ok"] and res["breaks"]
 
 
+def test_multiple_signoffs_all_verify_and_one_forgery_is_isolated(tmp_path):
+    pack, _, _ = _seal_pack(tmp_path)
+    ev.sign_pack(pack, by="alice", decision="approve")
+    ev.sign_pack(pack, by="bob", decision="approve", note="second reviewer")
+    assert ev.verify_pack(pack, root=tmp_path)["ok"]
+    pack["signoffs"][0]["by"] = "mallory"  # forge the first signer
+    res = ev.verify_pack(pack, root=tmp_path)
+    assert not res["ok"] and not res["signoffs_ok"]
+    assert any("signoff:mallory" in m for m in res["mismatches"])
+
+
+def test_chain_break_detected_when_packs_are_reordered(tmp_path):
+    d = tmp_path / "ev"
+    d.mkdir()
+    p1, _, _ = _seal_pack(tmp_path)
+    p2, _, _ = _seal_pack(tmp_path, light="red", prev=p1["seal"])
+    # write them with filenames that sort p2-before-p1 → prev_seal linkage is wrong
+    (d / "pack-100-aaa.json").write_text(json.dumps(p2))  # p2 sorts first now
+    (d / "pack-200-bbb.json").write_text(json.dumps(p1))
+    assert not ev.verify_chain(d)["ok"]
+
+
+def test_unicode_in_verdict_seals_and_verifies(tmp_path):
+    results = tmp_path / "results.json"
+    results.write_text("{}")
+    manifest = ev.build_manifest({"journeys": str(results)})
+    verdict = {"light": "orange", "reasons": ["réquirement dérive — 要審查 🚦"]}
+    pack = ev.build_pack(verdict, manifest, meta={"app": "x", "created": 1})
+    assert ev.verify_pack(pack, root=tmp_path)["ok"]
+    # and the seal is stable for identical unicode content
+    pack2 = ev.build_pack(verdict, manifest, meta={"app": "x", "created": 1})
+    assert pack["seal"] == pack2["seal"]
+
+
+def test_verify_against_a_flattened_archive_dir(tmp_path):
+    # seal with a nested input path, then verify from a dir holding only basenames
+    src = tmp_path / "run"
+    src.mkdir()
+    (src / "results.json").write_text('{"ok": true}')
+    manifest = ev.build_manifest({"journeys": str(src / "results.json")})
+    pack = ev.build_pack({"light": "green"}, manifest, meta={"app": "x", "created": 1})
+    archive = tmp_path / "archive"
+    archive.mkdir()
+    (archive / "results.json").write_text('{"ok": true}')  # same bytes, flattened
+    assert ev.verify_pack(pack, root=archive)["ok"]
+
+
 def test_list_packs_is_chronological(tmp_path):
     d = tmp_path / "ev"
     d.mkdir()

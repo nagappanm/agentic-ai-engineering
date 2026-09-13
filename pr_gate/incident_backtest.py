@@ -112,8 +112,9 @@ def match_incident(inc: dict, trace: dict[str, list[str]], files: dict[str, str]
         if j in trace:                       # a requirement id
             for fname in trace[j]:
                 credit(fname, f"named-journey:{j}")
-        for fname in files:                  # a file name / basename
-            if j == fname or Path(fname).name == j or j in fname:
+        for fname in files:                  # a file by full path, basename, or stem
+            base = Path(fname).name
+            if j in (fname, base, base.split(".")[0]):
                 credit(fname, f"named-journey:{fname}")
 
     # 3. symptom ↔ test-text lexical overlap (heuristic — flagged as such)
@@ -142,8 +143,9 @@ def backtest(incidents: list[dict], files: dict[str, str]) -> dict:
     blind = [{"id": r["id"], "title": r["title"], "severity": r["severity"]}
              for r in rows if not r["covered"]]
 
-    total_w = sum(r["severity"] for r in rows) or 1
+    total_w = sum(r["severity"] for r in rows)
     covered_w = sum(r["severity"] for r in covered)
+    weighted = 1.0 if not rows else (covered_w / total_w if total_w else 1.0)
 
     # backwards-scoring ranking: which test catches the most real incidents?
     value: dict[str, list[str]] = {}
@@ -161,7 +163,7 @@ def backtest(incidents: list[dict], files: dict[str, str]) -> dict:
             "covered": len(covered),
             "blind_spots": len(blind),
             "recall": round(len(covered) / len(rows), 3) if rows else 1.0,
-            "weighted_recall": round(covered_w / total_w, 3),
+            "weighted_recall": round(weighted, 3),
         },
         "incidents": rows,
         "blind_spots": blind,

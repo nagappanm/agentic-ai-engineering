@@ -92,6 +92,29 @@ def test_load_incidents_accepts_list_and_wrapped():
     assert as_list[0]["id"] == "X" and as_list[0]["severity"] == 1  # default
 
 
+def test_requirement_id_substring_does_not_falsely_cover():
+    # a test tracing only TMVC-10 must NOT be credited for a TMVC-1 incident
+    files = {"e2e/a.spec.ts": "test('x TMVC-10', () => {});"}
+    inc = {"id": "I", "title": "", "requirements": ["TMVC-1"], "journeys": [],
+           "symptom": "", "severity": 1}
+    assert ib.backtest([inc], files)["incidents"][0]["covered"] is False
+
+
+def test_named_journey_does_not_loosely_substring_match():
+    files = {"e2e/todomvc.spec.ts": "test('x TMVC-1', () => {});"}
+    loose = {"id": "L", "title": "", "requirements": [], "journeys": ["todo"],
+             "symptom": "", "severity": 1}
+    stem = {"id": "S", "title": "", "requirements": [], "journeys": ["todomvc"],
+            "symptom": "", "severity": 1}
+    assert ib.backtest([loose], files)["incidents"][0]["covered"] is False  # 'todo' ⊄ match
+    assert ib.backtest([stem], files)["incidents"][0]["covered"] is True     # stem matches
+
+
+def test_empty_log_is_vacuously_perfect():
+    r = ib.backtest([], FILES)
+    assert r["summary"]["recall"] == 1.0 and r["summary"]["weighted_recall"] == 1.0
+
+
 def test_integration_over_committed_example_and_real_suite():
     from pr_gate import reqdrift
     incidents = ib.load_incidents((REPO / "pr_gate/incidents.example.json").read_text())

@@ -112,6 +112,36 @@ def test_empty_diff_is_clean():
     assert r["findings"] == [] and r["summary"]["test_files_changed"] == 0
 
 
+# ---- comments must never be read as code (false-positive guards) ----
+
+
+def test_comment_mentioning_only_is_not_flagged():
+    d = _diff("e2e/todo.spec.ts", [], ["  // prefer .only while debugging locally"])
+    assert ag.scan_diff(d)["findings"] == []
+
+
+def test_removing_a_commented_out_assertion_is_not_flagged():
+    d = _diff("e2e/todo.spec.ts", ["    // expect(x).toBe(1);"], ["    // cleaned up"])
+    assert ag.scan_diff(d)["findings"] == []
+
+
+def test_inline_comment_does_not_inflate_removed_count():
+    # the trailing // comment carries a second expect(); only the real one counts
+    d = _diff("e2e/todo.spec.ts",
+              ["    expect(x).toBe(1); // was: expect(y).toBe(2)"],
+              ["    // removed"])
+    f = ag.scan_diff(d)["findings"]
+    assert [x["kind"] for x in f] == ["assertions-removed"]
+    assert f[0]["detail"].startswith("1 net")  # 1, not 2
+
+
+def test_real_skip_still_caught_despite_comment_stripping():
+    d = _diff("e2e/todo.spec.ts",
+              ["  test('adds', async () => {   // core flow"],
+              ["  test.skip('adds', async () => {  // TODO re-enable"])
+    assert "test-disabled" in _kinds(ag.scan_diff(d))
+
+
 def test_summary_counts_by_kind():
     # one file: skip + a dropped assertion
     d = _diff("e2e/todo.spec.ts",
