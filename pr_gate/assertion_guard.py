@@ -74,16 +74,23 @@ MOCK = re.compile(
 
 
 def _code_only(line: str) -> str:
-    """Drop comment text so a comment's words never count as code.
+    """Reduce a line to just its code, so comment/string text never counts as a
+    signal.
 
-    A full-line comment (`//`, `#`, `*`/`/*` block body) becomes empty; an inline
-    `//` or `#` comment is trimmed (guarding `://` so URLs in strings survive).
-    Good enough to stop `// prefer .only` or a commented-out `// expect(...)` from
-    being read as a real signal, without a full TS/Python parser.
+    Neutralises string-literal *contents* first (so `"type .only here"` or a URL
+    can't be read as code), then drops comments: a full-line comment (`//`, `#`,
+    `*`/`/*` block body) becomes empty, and inline `/* … */`, `// …` or `# …`
+    comments are trimmed. Good enough to stop a commented-out or quoted
+    `expect(...)`/`.only` from being read as a real signal, without a full TS/Python
+    parser (multi-line block comments are not tracked across lines).
     """
+    line = re.sub(r"'[^'\n]*'", "''", line)
+    line = re.sub(r'"[^"\n]*"', '""', line)
+    line = re.sub(r"`[^`\n]*`", "``", line)
     stripped = line.lstrip()
     if stripped.startswith(("//", "#", "*", "/*")):
         return ""
+    line = re.sub(r"/\*.*?\*/", "", line)
     line = re.sub(r"#.*$", "", line)
     line = re.sub(r"(?<!:)//.*$", "", line)
     return line

@@ -195,6 +195,29 @@ def test_unicode_in_verdict_seals_and_verifies(tmp_path):
     assert pack["seal"] == pack2["seal"]
 
 
+def test_tampering_a_signoff_note_is_caught(tmp_path):
+    pack, _, _ = _seal_pack(tmp_path)
+    ev.sign_pack(pack, by="alice", decision="approve", note="ok")
+    pack["signoffs"][0]["note"] = "TAMPERED"  # the note is part of the signature
+    assert not ev.verify_pack(pack, root=tmp_path)["ok"]
+
+
+def test_pack_with_missing_seal_field_fails(tmp_path):
+    pack, _, _ = _seal_pack(tmp_path)
+    del pack["seal"]
+    res = ev.verify_pack(pack, root=tmp_path)
+    assert not res["ok"] and not res["seal_ok"]
+
+
+def test_single_pack_chain_verifies(tmp_path):
+    d = tmp_path / "ev"
+    d.mkdir()
+    p1, _, _ = _seal_pack(tmp_path)  # prev_seal is None
+    (d / "pack-1-a.json").write_text(json.dumps(p1))
+    res = ev.verify_chain(d)
+    assert res["ok"] and res["packs"] == 1
+
+
 def test_verify_against_a_flattened_archive_dir(tmp_path):
     # seal with a nested input path, then verify from a dir holding only basenames
     src = tmp_path / "run"

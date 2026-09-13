@@ -115,6 +115,21 @@ def test_empty_log_is_vacuously_perfect():
     assert r["summary"]["recall"] == 1.0 and r["summary"]["weighted_recall"] == 1.0
 
 
+def test_multi_requirement_incident_covered_if_any_requirement_is_traced():
+    inc = {"id": "M", "title": "", "requirements": ["TMVC-1", "NOPE-9"], "journeys": [],
+           "symptom": "", "severity": 1}
+    row = ib.backtest([inc], FILES)["incidents"][0]
+    assert row["covered"] is True  # TMVC-1 is traced even though NOPE-9 is not
+
+
+def test_single_shared_term_is_not_enough_to_claim_coverage():
+    # one overlapping word ("login") is below the min-terms threshold → not covered
+    files = {"e2e/login.spec.ts": "test('user login flow', () => {});"}
+    inc = {"id": "N", "title": "login", "requirements": [], "journeys": [],
+           "symptom": "login", "severity": 1}
+    assert ib.backtest([inc], files)["incidents"][0]["covered"] is False
+
+
 def test_integration_over_committed_example_and_real_suite():
     from pr_gate import reqdrift
     incidents = ib.load_incidents((REPO / "pr_gate/incidents.example.json").read_text())

@@ -142,6 +142,39 @@ def test_real_skip_still_caught_despite_comment_stripping():
     assert "test-disabled" in _kinds(ag.scan_diff(d))
 
 
+def test_inline_block_comment_does_not_inflate_removed_count():
+    d = _diff("e2e/todo.spec.ts",
+              ["    expect(x).toBe(1); /* expect(y).toBe(2) */"],
+              ["    // removed"])
+    f = ag.scan_diff(d)["findings"]
+    assert [x["kind"] for x in f] == ["assertions-removed"]
+    assert f[0]["detail"].startswith("1 net")  # the commented expect doesn't count
+
+
+def test_assertion_token_inside_a_string_is_not_flagged():
+    d = _diff("e2e/todo.spec.ts", [], ['    const help = "type expect(true) to pass";'])
+    assert ag.scan_diff(d)["findings"] == []
+
+
+def test_only_inside_a_string_is_not_flagged():
+    d = _diff("e2e/todo.spec.ts", [], ['    log("use .only to focus a test");'])
+    assert ag.scan_diff(d)["findings"] == []
+
+
+def test_re_enabling_a_skipped_test_is_not_flagged():
+    # removing a .skip (turning a test back on) is the opposite of erosion
+    d = _diff("e2e/todo.spec.ts",
+              ["  test.skip('adds', async () => {"],
+              ["  test('adds', async () => {"])
+    assert ag.scan_diff(d)["findings"] == []
+
+
+def test_brand_new_test_file_is_not_flagged_as_removal():
+    d = _diff("e2e/new.spec.ts", [],
+              ["  test('adds TMVC-1', async () => {", "    expect(a).toBe(1);", "  });"])
+    assert ag.scan_diff(d)["findings"] == []
+
+
 def test_summary_counts_by_kind():
     # one file: skip + a dropped assertion
     d = _diff("e2e/todo.spec.ts",
