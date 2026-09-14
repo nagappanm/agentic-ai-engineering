@@ -135,6 +135,24 @@ test.describe("ParaBank — traced journeys", () => {
     await expect(nav.transferFunds).toBeVisible();
   });
 
+  test("TC-021 submitting before account data loads must not cause a server error PB-4", async ({ page }) => {
+    await login(page);
+    const nav = new NavPage(page);
+    const transfer = new TransferPage(page);
+
+    // Deliberately NO wait for the dropdown options: this is the race the
+    // openTransferForm() helper works around. A user on a slow connection hits
+    // it for real. PB-4 does not say whether the button should be disabled
+    // until the accounts load — but an internal server error is never
+    // acceptable behaviour, so the assertion is only that one does not occur.
+    await nav.transferFunds.click();
+    await transfer.amount.fill("100");
+    await transfer.submit.click();
+
+    await expect(page.getByRole("heading", { name: "Error!" })).toBeHidden();
+    await expect(page.getByText("An internal error has occurred")).toBeHidden();
+  });
+
   /* ----------------------------------------------------------------------- *
    * Blocked on clarification. Each carries the UNKNOWN from the test-design
    * artefact. None of these asserts a behaviour nobody has specified.

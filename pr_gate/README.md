@@ -59,6 +59,8 @@ never silent); omit the input entirely to opt out.
 | `justify.py` | `judge(ui_touched, yilsf_result)` — is a cache delta warranted by the PR + requirement? |
 | `bug_report.py` | `format_bug()` — YAML-front-matter + markdown repro an LLM can parse |
 | `tracker.py` | file the bug: **Jira REST** / **GitHub `gh`** / `--dry-run`; dedup + link-to-story |
+| `retest.py` | close the loop: on a green re-run, **close the bug the journey filed**, citing the evidence seal; keep it open (with the error head) while it still fails; never close on a passing *suite* |
+| `test_plan.py` | the planning artefact — scope, entry/exit criteria (**computed, not asserted**), risk-ordered order of play, traceability — derived from the requirement + yilsf design + specs |
 | `requirements_source.py` | requirement text from the linked Jira key (REST), else `e2e/requirements.txt` |
 
 ## Flakiness triage (`flakedoctor.py`)
