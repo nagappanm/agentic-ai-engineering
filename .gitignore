@@ -44,3 +44,4 @@ linkedin_assets/
 .DS_Store
 .idea/
 .vscode/
+.ci/stlc/
