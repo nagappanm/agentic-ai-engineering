@@ -1,0 +1,215 @@
+# qe_signals source registry — adding a source is a data change, not a code change.
+#
+# kind:       rss | hn | github | arxiv | sitemap_html
+# url:        feed / API URL (http(s) only; private hosts are refused at validation)
+# weight:     0–1, how much this source counts in ranking
+# tags:       free labels carried onto every Signal
+# min_interval_s: pause before each request to this source (arXiv ≈3s, GitHub ≈6s)
+# timeout_s:  per-request timeout
+# enabled:    false = validated but never fetched (say why in a comment)
+#
+# Endpoints below were live-verified 2026-09-14. X/Twitter is excluded: pay-per-use
+# API since Feb 2026, no free path. LambdaTest is now "TestMu AI".
+
+sources:
+  # ── Community & practitioner ──────────────────────────────────────────────
+  - name: ministry-of-testing
+    kind: rss
+    url: https://www.ministryoftesting.com/contents/rss
+    weight: 0.9
+    tags: [community, practice]
+
+  - name: testguild
+    kind: rss
+    url: https://testguild.com/feed/
+    weight: 0.7
+    tags: [podcast, practice]
+
+  - name: software-testing-weekly
+    kind: rss
+    url: https://softwaretestingweekly.com/rss/
+    weight: 0.8
+    tags: [newsletter, curated]
+
+  - name: testmu-ai-blog
+    kind: rss
+    url: https://www.testmuai.com/blog/feed.xml
+    weight: 0.6
+    tags: [vendor, agentic-qe]
+
+  # ── Tool releases ─────────────────────────────────────────────────────────
+  - name: playwright-releases
+    kind: rss
+    url: https://github.com/microsoft/playwright/releases.atom
+    weight: 1.0
+    tags: [release, playwright]
+
+  - name: cypress-releases
+    kind: rss
+    url: https://github.com/cypress-io/cypress/releases.atom
+    weight: 0.6
+    tags: [release, cypress]
+
+  - name: cypress-blog
+    kind: rss
+    url: https://www.cypress.io/blog/rss.xml
+    weight: 0.5
+    tags: [vendor, cypress]
+
+  - name: promptfoo-blog
+    kind: rss
+    url: https://www.promptfoo.dev/blog/rss.xml
+    weight: 0.8
+    tags: [llm-eval, vendor]
+
+  # ── YouTube channels (titles + descriptions only) ─────────────────────────
+  - name: yt-ministry-of-testing
+    kind: rss
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCG-ZnPKunTkEsY7xcaZcOQg
+    weight: 0.6
+    tags: [video, community]
+
+  - name: yt-testguild
+    kind: rss
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UC1IuOajCAtHvLyZgkIK47dQ
+    weight: 0.5
+    tags: [video, practice]
+
+  - name: yt-automation-step-by-step
+    kind: rss
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCTt7pyY-o0eltq14glaG5dg
+    weight: 0.4
+    tags: [video, tutorial]
+
+  - name: yt-playwright
+    kind: rss
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UC46Zj8pDH5tDosqm1gd7WTg
+    weight: 0.7
+    tags: [video, playwright]
+
+  # ── Hacker News (Algolia, https only) ─────────────────────────────────────
+  - name: hn-playwright
+    kind: hn
+    url: https://hn.algolia.com/api/v1/search_by_date?query=playwright&tags=story
+    weight: 0.8
+    tags: [hn, playwright]
+    min_interval_s: 1
+
+  - name: hn-test-automation
+    kind: hn
+    url: https://hn.algolia.com/api/v1/search_by_date?query=%22test%20automation%22&tags=story
+    weight: 0.8
+    tags: [hn, automation]
+    min_interval_s: 1
+
+  - name: hn-flaky-tests
+    kind: hn
+    url: https://hn.algolia.com/api/v1/search_by_date?query=%22flaky%20tests%22&tags=story
+    weight: 0.9
+    tags: [hn, flaky]
+    min_interval_s: 1
+
+  - name: hn-llm-evaluation
+    kind: hn
+    url: https://hn.algolia.com/api/v1/search_by_date?query=%22llm%20evaluation%22&tags=story
+    weight: 0.8
+    tags: [hn, llm-eval]
+    min_interval_s: 1
+
+  - name: hn-ai-agents-testing
+    kind: hn
+    url: https://hn.algolia.com/api/v1/search_by_date?query=%22ai%20agents%22%20testing&tags=story
+    weight: 0.8
+    tags: [hn, agents]
+    min_interval_s: 1
+
+  # ── GitHub repo search (10 req/min unauthenticated) ───────────────────────
+  - name: gh-playwright
+    kind: github
+    url: https://api.github.com/search/repositories?q=topic:playwright&sort=updated&order=desc&per_page=30
+    weight: 0.6
+    tags: [github, playwright]
+    min_interval_s: 6
+
+  - name: gh-test-automation
+    kind: github
+    url: https://api.github.com/search/repositories?q=topic:test-automation&sort=updated&order=desc&per_page=30
+    weight: 0.6
+    tags: [github, automation]
+    min_interval_s: 6
+
+  - name: gh-qa-automation
+    kind: github
+    url: https://api.github.com/search/repositories?q=topic:qa-automation&sort=updated&order=desc&per_page=30
+    weight: 0.6
+    tags: [github, automation]
+    min_interval_s: 6
+
+  - name: gh-llm-testing
+    kind: github
+    url: https://api.github.com/search/repositories?q=topic:llm-testing&sort=updated&order=desc&per_page=30
+    weight: 0.8
+    tags: [github, llm-eval]
+    min_interval_s: 6
+
+  - name: gh-ai-agents
+    kind: github
+    url: https://api.github.com/search/repositories?q=topic:ai-agents+testing&sort=updated&order=desc&per_page=30
+    weight: 0.5
+    tags: [github, agents]
+    min_interval_s: 6
+
+  # ── arXiv (≈1 req / 3 s) ──────────────────────────────────────────────────
+  - name: arxiv-llm-testing
+    kind: arxiv
+    url: http://export.arxiv.org/api/query?search_query=cat:cs.SE+AND+abs:%22LLM%20testing%22&sortBy=submittedDate&sortOrder=descending&max_results=25
+    weight: 0.7
+    tags: [research, llm-eval]
+    min_interval_s: 3
+
+  - name: arxiv-test-generation
+    kind: arxiv
+    url: http://export.arxiv.org/api/query?search_query=cat:cs.SE+AND+abs:%22test%20generation%22&sortBy=submittedDate&sortOrder=descending&max_results=25
+    weight: 0.7
+    tags: [research, test-generation]
+    min_interval_s: 3
+
+  - name: arxiv-agent-evaluation
+    kind: arxiv
+    url: http://export.arxiv.org/api/query?search_query=cat:cs.SE+AND+abs:%22agent%20evaluation%22&sortBy=submittedDate&sortOrder=descending&max_results=25
+    weight: 0.6
+    tags: [research, agents]
+    min_interval_s: 3
+
+  # ── No feed: sitemap + HTML (most likely to rot; watch health) ────────────
+  - name: selenium-blog
+    kind: sitemap_html
+    url: https://www.selenium.dev/sitemap.xml
+    path_prefix: /blog/
+    weight: 0.6
+    tags: [selenium, vendor]
+    min_interval_s: 1
+
+  - name: confident-ai-blog
+    kind: sitemap_html
+    url: https://www.confident-ai.com/sitemap.xml
+    path_prefix: /blog/
+    weight: 0.7
+    tags: [llm-eval, deepeval]
+    min_interval_s: 1
+
+  - name: langchain-blog
+    kind: sitemap_html
+    url: https://www.langchain.com/sitemap.xml
+    path_prefix: /blog/
+    weight: 0.5
+    tags: [agents, vendor]
+    min_interval_s: 1
+
+  - name: anthropic-engineering
+    kind: sitemap_html
+    url: https://www.anthropic.com/sitemap.xml
+    path_prefix: /engineering/
+    weight: 0.8
+    tags: [agents, engineering]
+    min_interval_s: 1

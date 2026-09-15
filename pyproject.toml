@@ -40,6 +40,14 @@ dev = [
 local = [
   "openai>=1.0",
 ]
+# Optional: qe_signals — weekly QE/AI-agent signal digest + idea backlog.
+# Install with:  pip install -e ".[signals]"
+signals = [
+  "feedparser>=6.0",
+  "pyyaml>=6.0",
+  "pydantic>=2.0",
+  "trafilatura>=2.0",
+]
 # Optional: Module 2 — LangChain chain, tools, and tool-calling agent.
 # Install with:  pip install -e ".[langchain]"
 langchain = [
@@ -63,6 +71,9 @@ packages = ["src/documind"]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["documind", "pr_gate", "qe_signals"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
