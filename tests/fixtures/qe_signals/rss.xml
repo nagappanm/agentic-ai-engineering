@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>Fixture Blog</title>
+<item><title>Taming flaky tests with Playwright locators</title><link>https://blog.example/flaky-locators/?utm_source=rss#top</link><pubDate>Wed, 10 Sep 2026 09:00:00 GMT</pubDate><description><![CDATA[<p>We cut our <b>flaky-test rate</b> by 40% using role locators.</p>]]></description></item>
+<item><title>Old post from spring</title><link>https://blog.example/old</link><pubDate>Mon, 02 Mar 2026 09:00:00 GMT</pubDate><description>Ancient history.</description></item>
+<item><title>Undated post</title><link>https://blog.example/undated</link><description>No date at all.</description></item>
+</channel></rss>

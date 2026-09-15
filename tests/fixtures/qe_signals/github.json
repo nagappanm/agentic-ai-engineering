@@ -1,0 +1,4 @@
+{"total_count":2,"items":[
+{"full_name":"acme/agentic-qa","html_url":"https://github.com/acme/agentic-qa","description":"LLM agent that triages flaky CI runs","stargazers_count":320,"pushed_at":"2026-09-12T03:00:00Z","created_at":"2026-08-30T00:00:00Z","topics":["testing","llm-testing"]},
+{"full_name":"acme/stale-repo","html_url":"https://github.com/acme/stale-repo","description":"old","stargazers_count":5,"pushed_at":"2025-01-01T00:00:00Z","created_at":"2024-01-01T00:00:00Z","topics":[]}
+]}
