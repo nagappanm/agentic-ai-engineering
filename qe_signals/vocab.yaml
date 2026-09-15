@@ -1,0 +1,100 @@
+# Scoring vocabulary for qe_signals.rank — deterministic, no LLM.
+# Edits change scores; tests/fixtures/qe_signals/scores.golden.json pins the current
+# behaviour so a weight change fails a test until the golden file is regenerated.
+#
+# Terms are matched case-insensitively on title + summary as whole words / phrases.
+
+quality_impact:
+  flaky: 1.0
+  flakiness: 1.0
+  regression: 0.8
+  "escaped defect": 1.0
+  "escaped defects": 1.0
+  coverage: 0.7
+  traceability: 1.0
+  traceable: 0.8
+  "self-healing": 0.9
+  locator: 0.8
+  locators: 0.8
+  "test generation": 0.9
+  "llm evaluation": 0.9
+  "llm eval": 0.9
+  "agent evaluation": 0.9
+  hallucination: 0.7
+  hallucinated: 0.7
+  guardrail: 0.9
+  guardrails: 0.9
+  deterministic: 0.8
+  "ci gate": 0.8
+  "quality gate": 0.8
+  mttr: 0.7
+  "test plan": 0.5
+  "test design": 0.5
+  a11y: 0.5
+  accessibility: 0.5
+  "visual regression": 0.6
+  contract: 0.4
+  "shift left": 0.3
+  benchmark: 0.5
+  evals: 0.7
+
+toolchain_fit:
+  playwright: 1.0            # klew
+  locator: 0.8               # klew
+  locators: 0.8              # klew
+  "page object": 0.5         # klew
+  requirement: 0.8           # yilsf
+  requirements: 0.8          # yilsf
+  jira: 0.6                  # yilsf
+  "acceptance criteria": 0.8 # yilsf
+  "pr gate": 0.8             # pr_gate
+  "pull request": 0.5        # pr_gate
+  "github actions": 0.5      # pr_gate
+  "ci pipeline": 0.6         # pr_gate
+  "static analysis": 0.5     # testguard
+  lint: 0.3                  # testguard
+  "test smells": 0.8         # testguard
+  "assertion": 0.5           # testguard
+  playbook: 0.5              # playbook-doctor
+  checklist: 0.4             # playbook-doctor
+  rag: 0.4                   # documind
+  retrieval: 0.4             # documind
+  agent: 0.6
+  agents: 0.6
+  agentic: 0.7
+  mcp: 0.6
+
+# Tokens ignored when comparing titles for near-duplicate detection and clustering
+stopwords:
+  - a
+  - an
+  - the
+  - and
+  - or
+  - of
+  - to
+  - in
+  - "on"
+  - for
+  - with
+  - is
+  - are
+  - how
+  - why
+  - what
+  - your
+  - you
+  - we
+  - our
+  - from
+  - by
+  - at
+  - vs
+  - v
+  - new
+  - using
+  - via
+  - into
+  - show
+  - hn
+  - ask
