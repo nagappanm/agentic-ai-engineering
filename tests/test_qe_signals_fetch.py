@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -383,3 +384,23 @@ def test_two_hn_text_posts_survive_dedupe():
     )
     assert len({s.id for s in sigs}) == 2
     assert len(rank.dedupe(sigs, rank.Vocab.load())) == 2
+
+
+# ── live smoke (R16): only when explicitly asked for; never in CI ───────────
+
+
+@pytest.mark.skipif(
+    not os.getenv("QE_SIGNALS_RUN_NETWORK_TESTS"),
+    reason="set QE_SIGNALS_RUN_NETWORK_TESTS=1 to hit three real sources",
+)
+def test_live_three_verified_sources_return_ok():
+    from datetime import datetime as _dt
+
+    from qe_signals import registry
+
+    reg = registry.load_registry()
+    want = {"ministry-of-testing", "playwright-releases", "hn-flaky-tests"}
+    entries = [e for e in reg.sources if e.name in want]
+    sigs, health = fetch.fetch_all(entries, _dt.now(UTC) - timedelta(days=30), log=lambda m: None)
+    assert {h.name: h.status for h in health} == dict.fromkeys(want, "ok")
+    assert all(h.items >= 1 for h in health) and sigs

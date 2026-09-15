@@ -43,8 +43,12 @@ Fail CLOSED: registry, playbook and the pid lock are checked before any network 
 
 ## Windows and spend
 
-- `--since` defaults to the time since the last **delivered** run (one that wrote
-  `backlog.json`); dry runs never count. Fallback 7d, cap 30d. The digest prints the window used.
+- `--since` defaults to the time since the last **delivered** run (one that ended with a
+  non-red verdict); dry runs and red runs (LLM unavailable, nothing fetched) never count, so a
+  broken week cannot drop its signals from the next window. Fallback 7d, cap 30d.
+- A missing `ANTHROPIC_API_KEY` is red before any fetch (dry-run exempt).
+- A second run in the same ISO week writes `<week>-digest-<sha8>.md` alongside the published
+  digest instead of overwriting it.
 - LLM calls ≤ `min(--max-calls, clusters × --max-iter × 2)`; `--dry-run` prints the projection.
 - The loop stops the moment an idea meets `--bar`; guardrail failures skip the judge call.
 
@@ -61,6 +65,15 @@ Fail CLOSED: registry, playbook and the pid lock are checked before any network 
 - YouTube channel feeds returned 404 with a consent redirect from this network for every
   channel id; parked with `enabled: false`. Software Testing Weekly moved its feed to
   `/issues/rss/`.
+
+## Tests
+
+`pytest -k qe_signals` is network-free (injected http/resolver/clock/LLM client). One live
+smoke test hits three verified sources and runs only when you ask for it:
+
+```bash
+QE_SIGNALS_RUN_NETWORK_TESTS=1 pytest tests/test_qe_signals_fetch.py -k live
+```
 
 ## Cognee
 
