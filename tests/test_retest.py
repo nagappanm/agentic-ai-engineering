@@ -6,8 +6,14 @@ from pr_gate import retest
 
 
 def _journey(jid: str, status: str, error: str = "") -> dict:
-    return {"id": jid, "title": f"{jid} something", "status": status,
-            "file": "x.spec.ts", "line": 1, "error": error}
+    return {
+        "id": jid,
+        "title": f"{jid} something",
+        "status": status,
+        "file": "x.spec.ts",
+        "line": 1,
+        "error": error,
+    }
 
 
 def test_journey_of_parses_dedup_key():
@@ -48,8 +54,20 @@ def test_a_passing_suite_never_closes_a_bug_for_a_different_journey():
 
 
 def test_cli_offline_dry_run(tmp_path, capsys):
-    report = {"suites": [{"specs": [{"title": "TC-006 transfer PB-4", "file": "a.spec.ts",
-                                     "line": 3, "tests": [{"results": [{"status": "passed"}]}]}]}]}
+    report = {
+        "suites": [
+            {
+                "specs": [
+                    {
+                        "title": "TC-006 transfer PB-4",
+                        "file": "a.spec.ts",
+                        "line": 3,
+                        "tests": [{"results": [{"status": "passed"}]}],
+                    }
+                ]
+            }
+        ]
+    }
     results = tmp_path / "results.json"
     results.write_text(json.dumps(report))
     bugs = tmp_path / "bugs.json"
@@ -59,8 +77,18 @@ def test_cli_offline_dry_run(tmp_path, capsys):
     pack = tmp_path / "pack.json"
     pack.write_text(json.dumps({"seal": "f" * 64}))
 
-    rc = retest.main(["--results", str(results), "--bugs", str(bugs),
-                      "--evidence", str(pack), "--dry-run", "--json"])
+    rc = retest.main(
+        [
+            "--results",
+            str(results),
+            "--bugs",
+            str(bugs),
+            "--evidence",
+            str(pack),
+            "--dry-run",
+            "--json",
+        ]
+    )
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
     assert out["run"] == "ffffffff"

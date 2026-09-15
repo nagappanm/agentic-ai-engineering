@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Release notes from playwright</title>
+<entry><id>tag:github.com,2008:Repository/68657720/v1.63.0</id><updated>2026-09-11T18:00:00Z</updated><link rel="alternate" type="text/html" href="https://github.com/microsoft/playwright/releases/tag/v1.63.0"/><title>v1.63.0</title><content type="html">&lt;h2&gt;Highlights&lt;/h2&gt;&lt;ul&gt;&lt;li&gt;New &lt;code&gt;locator.describe()&lt;/code&gt; for self-healing locators&lt;/li&gt;&lt;/ul&gt;</content></entry>
+</feed>

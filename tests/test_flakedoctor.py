@@ -4,6 +4,7 @@ The load-bearing distinction is regression vs flaky: `test_regression_files_a_bu
 and `test_flaky_is_quarantined_not_filed` prove flakedoctor files a bug for a real
 break but quarantines an intermittent one — the whole reason it exists.
 """
+
 from __future__ import annotations
 
 from pr_gate import flakedoctor as fd
@@ -20,8 +21,10 @@ def _report(statuses: dict[str, list[str]]) -> dict:
         results = [{"status": s} for s in attempts]
         test = {"results": results}
         # Playwright labels a retried-then-passed test "flaky" at the test level.
-        if len(attempts) > 1 and attempts[-1] == "passed" and any(
-            s != "passed" for s in attempts[:-1]
+        if (
+            len(attempts) > 1
+            and attempts[-1] == "passed"
+            and any(s != "passed" for s in attempts[:-1])
         ):
             test["status"] = "flaky"
         specs.append({"title": f"journey {jid}", "tests": [test]})
@@ -35,14 +38,19 @@ def _run(**single_status: str) -> dict:
 
 # ---- per-run outcome parsing ---------------------------------------------- #
 
+
 def test_run_outcomes_pass_fail_flaky():
-    report = _report({
-        "TMVC-1": ["passed"],
-        "TMVC-2": ["failed"],
-        "TMVC-3": ["failed", "passed"],   # retried → flaky
-    })
+    report = _report(
+        {
+            "TMVC-1": ["passed"],
+            "TMVC-2": ["failed"],
+            "TMVC-3": ["failed", "passed"],  # retried → flaky
+        }
+    )
     assert fd.run_outcomes(report) == {
-        "TMVC-1": fd.PASS, "TMVC-2": fd.FAIL, "TMVC-3": fd.FLAKY,
+        "TMVC-1": fd.PASS,
+        "TMVC-2": fd.FAIL,
+        "TMVC-3": fd.FLAKY,
     }
 
 
@@ -51,6 +59,7 @@ def test_all_attempts_pass_is_pass_not_flaky():
 
 
 # ---- classification -------------------------------------------------------- #
+
 
 def test_stable_pass():
     assert fd.classify([fd.PASS, fd.PASS, fd.PASS]) == "stable-pass"
@@ -80,6 +89,7 @@ def test_any_within_run_flake_is_flaky():
 
 # ---- flakiness score ------------------------------------------------------- #
 
+
 def test_score_zero_for_all_pass():
     assert fd.flakiness_score([fd.PASS, fd.PASS, fd.PASS]) == 0.0
 
@@ -95,6 +105,7 @@ def test_score_nonzero_for_single_within_run_flake():
 
 # ---- gate advice: the reason it exists ------------------------------------- #
 
+
 def test_regression_files_a_bug():
     a = fd.advise("regression")
     assert a["file_bug"] is True and a["light"] == "red"
@@ -106,6 +117,7 @@ def test_flaky_is_quarantined_not_filed():
 
 
 # ---- end-to-end triage ----------------------------------------------------- #
+
 
 def test_triage_separates_regression_from_flaky():
     # 4 runs; TMVC-1 breaks and stays broken (regression), TMVC-2 flip-flops (flaky),

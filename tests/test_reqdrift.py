@@ -4,6 +4,7 @@ The load-bearing case is `test_drift_flags_only_the_tracing_tests`: when a
 requirement's wording changes, reqdrift must name exactly the specs that trace to
 it (and gate), while leaving untouched requirements alone.
 """
+
 from __future__ import annotations
 
 from pr_gate import reqdrift as rd
@@ -21,6 +22,7 @@ FILES = {
 
 
 # ---- parsing + hashing ----------------------------------------------------- #
+
 
 def test_parse_requirements():
     reqs = rd.parse_requirements(REQS)
@@ -40,6 +42,7 @@ def test_hash_ignores_whitespace_and_case_but_not_words():
 
 # ---- traceability ---------------------------------------------------------- #
 
+
 def test_traceability_maps_id_to_files():
     trace = rd.build_traceability(FILES)
     assert trace["TMVC-1"] == ["todomvc.spec.ts"]
@@ -48,6 +51,7 @@ def test_traceability_maps_id_to_files():
 
 
 # ---- diff: the core drift signal ------------------------------------------- #
+
 
 def _baseline():
     reqs = rd.parse_requirements(REQS)
@@ -72,13 +76,15 @@ def test_drift_flags_only_the_tracing_tests():
     report = rd.diff(reqs, rd.build_traceability(FILES), baseline)
     assert [d["id"] for d in report["drifted"]] == ["TMVC-1"]
     assert report["drifted"][0]["tests"] == ["todomvc.spec.ts"]
-    assert rd.has_stale(report) is True                    # gates
+    assert rd.has_stale(report) is True  # gates
 
 
 def test_removed_requirement_orphans_its_tests():
     baseline = _baseline()
-    reqs = rd.parse_requirements("TMVC-1: A user can add an item; the count reflects it.\n"
-                                 "TMVC-2: Adding several items keeps an accurate count.")
+    reqs = rd.parse_requirements(
+        "TMVC-1: A user can add an item; the count reflects it.\n"
+        "TMVC-2: Adding several items keeps an accurate count."
+    )
     report = rd.diff(reqs, rd.build_traceability(FILES), baseline)
     assert [r["id"] for r in report["removed"]] == ["TMVC-3"]
     assert report["removed"][0]["tests"] == ["journeys.spec.ts"]
@@ -105,8 +111,10 @@ def test_reworded_but_untested_requirement_does_not_gate():
     # no stale tests to re-review → must NOT gate.
     files = {"todomvc.spec.ts": 'test("adds TMVC-1", () => {});'}  # only TMVC-1 traced
     baseline = rd.build_manifest(rd.parse_requirements(REQS), rd.build_traceability(files))
-    changed = REQS.replace("Adding several items keeps an accurate count.",
-                           "Adding several items keeps a precise count.")   # TMVC-2, untested
+    changed = REQS.replace(
+        "Adding several items keeps an accurate count.",
+        "Adding several items keeps a precise count.",
+    )  # TMVC-2, untested
     report = rd.diff(rd.parse_requirements(changed), rd.build_traceability(files), baseline)
     assert [d["id"] for d in report["drifted"]] == ["TMVC-2"]
-    assert rd.has_stale(report) is False                   # no tracing tests → no gate
+    assert rd.has_stale(report) is False  # no tracing tests → no gate

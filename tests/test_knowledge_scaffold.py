@@ -4,6 +4,7 @@ Pure-function tests over `scaffold()` + the shared region helpers. The key
 guarantees: it generates per-area regions, is idempotent, never touches prose
 outside the markers, and `--reconcile` stamps the signature.
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -30,12 +31,27 @@ def make_cache() -> dict:
         "app": "demo",
         "base_url": "http://127.0.0.1:8123/",
         "selectors": {
-            "todo.newInput": {"selector": "getByRole('textbox', { name: 'New todo' })",
-                              "tier": "role", "page": "/", "a11y_flag": False, "confidence": 1.0},
-            "todo.count": {"selector": "getByTestId('todo-count')",
-                           "tier": "testid", "page": "/", "a11y_flag": True, "confidence": 0.75},
-            "filter.all": {"selector": "getByRole('link', { name: 'All' })",
-                           "tier": "role", "page": "/", "a11y_flag": False, "confidence": 1.0},
+            "todo.newInput": {
+                "selector": "getByRole('textbox', { name: 'New todo' })",
+                "tier": "role",
+                "page": "/",
+                "a11y_flag": False,
+                "confidence": 1.0,
+            },
+            "todo.count": {
+                "selector": "getByTestId('todo-count')",
+                "tier": "testid",
+                "page": "/",
+                "a11y_flag": True,
+                "confidence": 0.75,
+            },
+            "filter.all": {
+                "selector": "getByRole('link', { name: 'All' })",
+                "tier": "role",
+                "page": "/",
+                "a11y_flag": False,
+                "confidence": 1.0,
+            },
         },
     }
 
@@ -104,7 +120,10 @@ def test_check_flags_a_new_area_region_as_missing():
     out = scaffold(NOTE, cache, reconcile=True)  # regions + signature for the 3-selector cache
     cache["selectors"]["checkout.pay"] = {
         "selector": "getByRole('button', { name: 'Pay' })",
-        "tier": "role", "page": "/checkout", "a11y_flag": False, "confidence": 1.0,
+        "tier": "role",
+        "page": "/checkout",
+        "a11y_flag": False,
+        "confidence": 1.0,
     }
     # signature captured before checkout was added → both signature + region drift fire
     fm, body = parse_frontmatter(out)

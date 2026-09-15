@@ -37,6 +37,9 @@ data/
 /assertion.json
 /qe-board.html
 
+# qe_signals per-run artefacts (raw fetches, traces, backlog) — regenerated weekly, pruned with --keep
+.ci/qe-signals/
+
 # Scratch LinkedIn carousel assets (not part of the package)
 linkedin_assets/
 

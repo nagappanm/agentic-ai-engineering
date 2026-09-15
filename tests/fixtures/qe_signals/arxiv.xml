@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+<entry><id>http://arxiv.org/abs/2609.01234v1</id><updated>2026-09-10T00:00:00Z</updated><published>2026-09-10T00:00:00Z</published><title>Evaluating LLM Agents as Test Generators: A Traceability Study</title><summary>We study whether LLM-generated tests trace to requirements and measure hallucinated assertions.</summary><author><name>A. Author</name></author><link href="http://arxiv.org/abs/2609.01234v1" rel="alternate" type="text/html"/><category term="cs.SE"/></entry>
+<entry><id>http://arxiv.org/abs/2603.00001v1</id><updated>2026-03-01T00:00:00Z</updated><published>2026-03-01T00:00:00Z</published><title>Too old paper</title><summary>x</summary><link href="http://arxiv.org/abs/2603.00001v1" rel="alternate" type="text/html"/></entry>
+</feed>

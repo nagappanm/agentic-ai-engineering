@@ -1,4 +1,5 @@
 """Unit tests for qe-trends — longitudinal health + gate-vs-human meta-eval."""
+
 from __future__ import annotations
 
 from pr_gate import qe_trends as qt
@@ -9,8 +10,7 @@ def _report(**status):
     specs = []
     for jid, st in status.items():
         if st == "flaky":
-            test = {"status": "flaky",
-                    "results": [{"status": "failed"}, {"status": "passed"}]}
+            test = {"status": "flaky", "results": [{"status": "failed"}, {"status": "passed"}]}
         else:
             test = {"results": [{"status": st}]}
         specs.append({"title": f"j {jid}", "tests": [test]})
@@ -18,6 +18,7 @@ def _report(**status):
 
 
 # ---- trend ---------------------------------------------------------------- #
+
 
 def test_per_run_pass_rate():
     reports = [_report(**{"TMVC-1": "passed", "TMVC-2": "failed"})]
@@ -67,8 +68,8 @@ def test_regression_and_chronic_surface():
         _report(**{"AB-1": "failed", "AB-3": "failed"}),
     ]
     s = qt.trend(reports)["summary"]
-    assert "AB-1" in s["regressions"]              # PPFF → regression
-    assert "AB-3" in s["chronic_failures"]         # fails in 100% of runs
+    assert "AB-1" in s["regressions"]  # PPFF → regression
+    assert "AB-3" in s["chronic_failures"]  # fails in 100% of runs
 
 
 def test_single_run_is_insufficient_history():
@@ -77,12 +78,13 @@ def test_single_run_is_insufficient_history():
 
 # ---- meta-eval ------------------------------------------------------------ #
 
+
 def test_verdict_accuracy_agreements_and_defer():
     verdicts = [
-        {"sha": "a", "light": "green", "merged": True},    # agree
-        {"sha": "b", "light": "red", "merged": False},     # agree
-        {"sha": "c", "light": "green", "merged": False},   # DISAGREE (green not merged)
-        {"sha": "d", "light": "orange", "merged": True},   # deferred (excluded)
+        {"sha": "a", "light": "green", "merged": True},  # agree
+        {"sha": "b", "light": "red", "merged": False},  # agree
+        {"sha": "c", "light": "green", "merged": False},  # DISAGREE (green not merged)
+        {"sha": "d", "light": "orange", "merged": True},  # deferred (excluded)
     ]
     acc = qt.verdict_accuracy(verdicts)
     assert acc["decided"] == 3 and acc["agreements"] == 2

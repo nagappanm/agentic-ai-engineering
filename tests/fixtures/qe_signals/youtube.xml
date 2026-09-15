@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+<title>Fixture Channel</title>
+<entry><id>yt:video:abc123</id><yt:videoId>abc123</yt:videoId><title>AI agents for regression testing — demo</title><link rel="alternate" href="https://www.youtube.com/watch?v=abc123"/><published>2026-09-12T10:00:00+00:00</published>
+<media:group><media:title>AI agents for regression testing — demo</media:title><media:description>We show an agent that writes Playwright tests from requirements and tracks coverage.</media:description><media:thumbnail url="https://i.ytimg.com/vi/abc123/hqdefault.jpg"/></media:group></entry>
+</feed>

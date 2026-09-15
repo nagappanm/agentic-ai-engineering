@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format run demo clean
+.PHONY: install dev test lint format run demo clean signals signals-dry
 
 install:        ## Install the package
 	pip install -e .
@@ -21,6 +21,12 @@ demo:           ## Run the Module 1 limitations demo
 
 run:            ## Ask DocuMind a question: make run Q="your question"
 	python -m documind.llm "$(Q)"
+
+signals:        ## Weekly QE signal digest: fetch → rank → ideate → deliver (spends LLM tokens)
+	python -m qe_signals.run $(ARGS)
+
+signals-dry:    ## Fetch + rank only, no LLM spend; prints clusters and projected call count
+	python -m qe_signals.run --dry-run $(ARGS)
 
 clean:          ## Remove caches and build artifacts
 	rm -rf build dist *.egg-info src/*.egg-info .pytest_cache .ruff_cache

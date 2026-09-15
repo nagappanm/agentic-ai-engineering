@@ -52,8 +52,12 @@ def test_green_with_justified_delta_commits():
 
 def test_knowledge_stale_turns_green_to_orange():
     v = gate.decide(
-        _journeys(10), _tg(mean=100), cache_update_needed=False, justified=None,
-        config=CONFIG, knowledge_stale=True,
+        _journeys(10),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        knowledge_stale=True,
     )
     assert v["light"] == "orange"
     assert any("knowledge note stale" in r for r in v["reasons"])
@@ -62,8 +66,12 @@ def test_knowledge_stale_turns_green_to_orange():
 def test_knowledge_stale_info_mode_stays_green_with_note():
     cfg = {**CONFIG, "knowledge_drift": "info"}
     v = gate.decide(
-        _journeys(10), _tg(mean=100), cache_update_needed=False, justified=None,
-        config=cfg, knowledge_stale=True,
+        _journeys(10),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=cfg,
+        knowledge_stale=True,
     )
     assert v["light"] == "green"
     assert any("knowledge note stale" in n for n in v["notes"])
@@ -71,16 +79,24 @@ def test_knowledge_stale_info_mode_stays_green_with_note():
 
 def test_knowledge_stale_never_causes_red():
     v = gate.decide(
-        _journeys(10), _tg(mean=100), cache_update_needed=False, justified=None,
-        config=CONFIG, knowledge_stale=True,
+        _journeys(10),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        knowledge_stale=True,
     )
     assert v["light"] != "red"
 
 
 def test_knowledge_stale_does_not_downgrade_a_real_red():
     v = gate.decide(
-        _journeys(9, 1), _tg(mean=100), cache_update_needed=False, justified=None,
-        config=CONFIG, knowledge_stale=True,
+        _journeys(9, 1),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        knowledge_stale=True,
     )
     assert v["light"] == "red"
     assert any("knowledge note stale" in n for n in v.get("notes", []))
@@ -88,8 +104,12 @@ def test_knowledge_stale_does_not_downgrade_a_real_red():
 
 def test_knowledge_fresh_leaves_verdict_and_notes_clean():
     v = gate.decide(
-        _journeys(10), _tg(mean=100), cache_update_needed=False, justified=None,
-        config=CONFIG, knowledge_stale=False,
+        _journeys(10),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        knowledge_stale=False,
     )
     assert v["light"] == "green" and v.get("notes", []) == []
 
@@ -105,8 +125,14 @@ def test_red_on_failed_journey():
 def test_flaky_failure_is_quarantined_not_red():
     # the only failing journey is flaky → no red, quarantined as an orange note.
     js = _journeys(4) + [{"id": "TMVC-9", "title": "f", "status": "failed", "error": "x"}]
-    v = gate.decide(js, _tg(mean=100), cache_update_needed=False, justified=None,
-                    config=CONFIG, flaky_ids={"TMVC-9"})
+    v = gate.decide(
+        js,
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        flaky_ids={"TMVC-9"},
+    )
     assert v["light"] == "orange"
     assert "TMVC-9" in v["quarantined"]
     assert any("quarantined" in r for r in v["reasons"])
@@ -118,50 +144,92 @@ def test_flaky_plus_real_failure_still_red():
         {"id": "TMVC-9", "title": "flaky", "status": "failed", "error": "x"},
         {"id": "TMVC-8", "title": "real", "status": "failed", "error": "x"},
     ]
-    v = gate.decide(js, _tg(mean=100), cache_update_needed=False, justified=None,
-                    config=CONFIG, flaky_ids={"TMVC-9"})
+    v = gate.decide(
+        js,
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        flaky_ids={"TMVC-9"},
+    )
     assert v["light"] == "red"
-    assert [j["id"] for j in v["failed_journeys"]] == ["TMVC-8"]   # flaky excluded
+    assert [j["id"] for j in v["failed_journeys"]] == ["TMVC-8"]  # flaky excluded
     assert v["quarantined"] == ["TMVC-9"]
-    assert any("quarantined" in n for n in v["notes"])             # surfaced on red too
+    assert any("quarantined" in n for n in v["notes"])  # surfaced on red too
 
 
 def test_reqdrift_stale_turns_green_to_orange():
-    v = gate.decide(_journeys(10), _tg(mean=100), cache_update_needed=False,
-                    justified=None, config=CONFIG, reqdrift_stale=True)
+    v = gate.decide(
+        _journeys(10),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        reqdrift_stale=True,
+    )
     assert v["light"] == "orange"
     assert any("drifted vs baseline" in r for r in v["reasons"])
 
 
 def test_reqdrift_stale_never_causes_red():
-    v = gate.decide(_journeys(10), _tg(mean=100), cache_update_needed=False,
-                    justified=None, config=CONFIG, reqdrift_stale=True)
+    v = gate.decide(
+        _journeys(10),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        reqdrift_stale=True,
+    )
     assert v["light"] != "red"
 
 
 def test_intent_weak_turns_green_to_orange():
-    v = gate.decide(_journeys(10), _tg(mean=100), cache_update_needed=False,
-                    justified=None, config=CONFIG, intent_weak=["TMVC-5", "TMVC-6"])
+    v = gate.decide(
+        _journeys(10),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        intent_weak=["TMVC-5", "TMVC-6"],
+    )
     assert v["light"] == "orange"
     assert any("weakly asserted" in r for r in v["reasons"])
 
 
 def test_intent_weak_never_causes_red():
-    v = gate.decide(_journeys(10), _tg(mean=100), cache_update_needed=False,
-                    justified=None, config=CONFIG, intent_weak=["TMVC-5"])
+    v = gate.decide(
+        _journeys(10),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        intent_weak=["TMVC-5"],
+    )
     assert v["light"] != "red"
 
 
 def test_intent_weak_noted_on_a_real_red():
-    v = gate.decide(_journeys(9, 1), _tg(mean=100), cache_update_needed=False,
-                    justified=None, config=CONFIG, intent_weak=["TMVC-5"])
+    v = gate.decide(
+        _journeys(9, 1),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        intent_weak=["TMVC-5"],
+    )
     assert v["light"] == "red"
     assert any("weakly asserted" in n for n in v.get("notes", []))
 
 
 def test_reqdrift_stale_noted_on_a_real_red():
-    v = gate.decide(_journeys(9, 1), _tg(mean=100), cache_update_needed=False,
-                    justified=None, config=CONFIG, reqdrift_stale=True)
+    v = gate.decide(
+        _journeys(9, 1),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        reqdrift_stale=True,
+    )
     assert v["light"] == "red"
     assert any("drifted vs baseline" in n for n in v.get("notes", []))
 
@@ -240,14 +308,17 @@ def test_red_beats_orange():
 
 
 def _af(*kinds):
-    return [{"file": "e2e/x.spec.ts", "kind": k, "severity": "orange", "detail": k}
-            for k in kinds]
+    return [{"file": "e2e/x.spec.ts", "kind": k, "severity": "orange", "detail": k} for k in kinds]
 
 
 def test_assertion_findings_turn_green_to_orange():
     v = gate.decide(
-        _journeys(10), _tg(mean=100), cache_update_needed=False, justified=None,
-        config=CONFIG, assertion_findings=_af("test-disabled", "assertions-removed"),
+        _journeys(10),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        assertion_findings=_af("test-disabled", "assertions-removed"),
     )
     assert v["light"] == "orange"
     assert any("assertion_guard" in r for r in v["reasons"])
@@ -255,16 +326,24 @@ def test_assertion_findings_turn_green_to_orange():
 
 def test_assertion_findings_never_cause_red():
     v = gate.decide(
-        _journeys(10), _tg(mean=100), cache_update_needed=False, justified=None,
-        config=CONFIG, assertion_findings=_af("test-narrowed"),
+        _journeys(10),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        assertion_findings=_af("test-narrowed"),
     )
     assert v["light"] != "red"
 
 
 def test_assertion_findings_do_not_downgrade_a_real_red():
     v = gate.decide(
-        _journeys(9, 1), _tg(mean=100), cache_update_needed=False, justified=None,
-        config=CONFIG, assertion_findings=_af("assertions-removed"),
+        _journeys(9, 1),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        assertion_findings=_af("assertions-removed"),
     )
     assert v["light"] == "red"
     assert any("assertion_guard" in n for n in v.get("notes", []))
@@ -272,8 +351,12 @@ def test_assertion_findings_do_not_downgrade_a_real_red():
 
 def test_no_assertion_findings_stays_green():
     v = gate.decide(
-        _journeys(10), _tg(mean=100), cache_update_needed=False, justified=None,
-        config=CONFIG, assertion_findings=[],
+        _journeys(10),
+        _tg(mean=100),
+        cache_update_needed=False,
+        justified=None,
+        config=CONFIG,
+        assertion_findings=[],
     )
     assert v["light"] == "green"
 
@@ -380,13 +463,13 @@ def test_extract_jira_key():
 
 
 def test_read_report_none_on_missing_empty_or_invalid(tmp_path):
-    assert gate.read_report(str(tmp_path / "nope.json")) is None          # missing
+    assert gate.read_report(str(tmp_path / "nope.json")) is None  # missing
     empty = tmp_path / "empty.json"
     empty.write_text("   \n")
-    assert gate.read_report(str(empty)) is None                            # empty
+    assert gate.read_report(str(empty)) is None  # empty
     bad = tmp_path / "bad.json"
     bad.write_text("{not valid")
-    assert gate.read_report(str(bad)) is None                              # invalid
+    assert gate.read_report(str(bad)) is None  # invalid
     good = tmp_path / "good.json"
     good.write_text('{"stats": {"unexpected": 0}}')
-    assert gate.read_report(str(good)) == {"stats": {"unexpected": 0}}     # valid
+    assert gate.read_report(str(good)) == {"stats": {"unexpected": 0}}  # valid

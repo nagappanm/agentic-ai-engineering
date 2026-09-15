@@ -4,6 +4,7 @@ Covers the two enterprise wins: per-area signatures isolate drift (a checkout
 change never moves login's fingerprint), and the split scaffold/check round-trip
 localizes "stale" to the one area file that actually changed.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,15 +28,26 @@ def make_cache() -> dict:
         "app": "shop",
         "base_url": "http://shop.local/",
         "selectors": {
-            "login.email": {"selector": "getByLabel('Email')", "tier": "label-text",
-                            "page": "/login", "a11y_flag": False, "confidence": 0.9},
+            "login.email": {
+                "selector": "getByLabel('Email')",
+                "tier": "label-text",
+                "page": "/login",
+                "a11y_flag": False,
+                "confidence": 0.9,
+            },
             "login.submit": {
-                "selector": "getByRole('button', { name: 'Sign in' })", "tier": "role",
-                "page": "/login", "a11y_flag": False, "confidence": 1.0,
+                "selector": "getByRole('button', { name: 'Sign in' })",
+                "tier": "role",
+                "page": "/login",
+                "a11y_flag": False,
+                "confidence": 1.0,
             },
             "checkout.pay": {
-                "selector": "getByRole('button', { name: 'Pay' })", "tier": "role",
-                "page": "/checkout", "a11y_flag": False, "confidence": 1.0,
+                "selector": "getByRole('button', { name: 'Pay' })",
+                "tier": "role",
+                "page": "/checkout",
+                "a11y_flag": False,
+                "confidence": 1.0,
             },
         },
     }
@@ -49,10 +61,13 @@ def test_area_signature_scopes_to_one_area():
     login_sig = cache_signature(cache, area="login")
     # Change checkout only.
     cache["selectors"]["checkout.promo"] = {
-        "selector": "getByLabel('Promo')", "tier": "label-text",
-        "page": "/checkout", "a11y_flag": False, "confidence": 0.9,
+        "selector": "getByLabel('Promo')",
+        "tier": "label-text",
+        "page": "/checkout",
+        "a11y_flag": False,
+        "confidence": 0.9,
     }
-    assert cache_signature(cache, area="login") == login_sig       # login unaffected
+    assert cache_signature(cache, area="login") == login_sig  # login unaffected
     assert cache_signature(cache, area="checkout") != cache_signature(make_cache(), area="checkout")
     assert cache_signature(cache) != cache_signature(make_cache())  # whole-app moves
 
@@ -81,9 +96,7 @@ def test_split_scaffold_creates_index_and_area_files(split_app, tmp_path):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
     assert (tmp_path / split_app / "shop.md").exists()
-    assert {p.stem for p in (tmp_path / split_app / "areas").glob("*.md")} == {
-        "login", "checkout"
-    }
+    assert {p.stem for p in (tmp_path / split_app / "areas").glob("*.md")} == {"login", "checkout"}
 
 
 def test_split_check_up_to_date_after_reconcile(split_app, tmp_path):
@@ -102,8 +115,11 @@ def test_split_drift_localizes_to_the_changed_area(split_app, tmp_path):
         path.write_text(text)
     # Change checkout only; re-load and check.
     cache["selectors"]["checkout.promo"] = {
-        "selector": "getByLabel('Promo')", "tier": "label-text",
-        "page": "/checkout", "a11y_flag": False, "confidence": 0.9,
+        "selector": "getByLabel('Promo')",
+        "tier": "label-text",
+        "page": "/checkout",
+        "a11y_flag": False,
+        "confidence": 0.9,
     }
     result = knowledge_check.check_split(split_app, cache)
     assert result["status"] == "update-needed"
