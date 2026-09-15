@@ -143,8 +143,14 @@ def test_idea_accepts_every_toolchain_value():
 
 def test_playbook_exists_and_hash_is_stable(tmp_path: Path):
     assert REPO_PLAYBOOK.exists()
-    a = models.file_sha(REPO_PLAYBOOK)
+    text = REPO_PLAYBOOK.read_text(encoding="utf-8")
+    a = models.sha256_text(text)
     copy = tmp_path / "pb.md"
-    copy.write_text(REPO_PLAYBOOK.read_text(encoding="utf-8"), encoding="utf-8")
-    assert models.file_sha(copy) == a
+    copy.write_text(text, encoding="utf-8")
+    assert models.sha256_text(copy.read_text(encoding="utf-8")) == a
     assert len(a) == 64
+
+
+def test_strip_tags_shared_primitive():
+    assert models.strip_tags("<p>a  <b>b</b>\n c</p>") == "a b c"
+    assert models.strip_tags("") == "" and models.strip_tags(None) == ""

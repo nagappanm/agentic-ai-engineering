@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -16,7 +16,7 @@ from qe_signals.models import SourceEntry, SourceKind  # noqa: E402
 
 FIX = Path(__file__).parent / "fixtures" / "qe_signals"
 NOW = datetime(2026, 9, 14, 12, 0, tzinfo=UTC)
-SINCE = fetch.since_from(7, NOW)  # 2026-09-07
+SINCE = NOW - timedelta(days=7)  # 2026-09-07
 
 
 def _public(host: str) -> list[str]:

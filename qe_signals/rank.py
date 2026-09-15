@@ -203,10 +203,6 @@ def cluster(signals: list[Signal], scores: dict[str, dict], vocab: Vocab) -> lis
     return sorted(out, key=lambda c: (-c.total_score, c.key_term))
 
 
-def top_clusters(clusters: list[Cluster], n: int) -> list[Cluster]:
-    return clusters[:n]
-
-
 # ── skip seen ───────────────────────────────────────────────────────────────
 
 

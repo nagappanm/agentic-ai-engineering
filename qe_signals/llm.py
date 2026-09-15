@@ -88,39 +88,20 @@ def shape_of(model: type[BaseModel]) -> str:
     return "{\n" + ",\n".join(parts) + "\n}"
 
 
+_DECODER = json.JSONDecoder()
+
+
 def extract_json(text: str) -> str | None:
     """Return the first balanced JSON object/array in `text`, tolerating fences and prose."""
     if not text:
         return None
     t = re.sub(r"```(?:json)?", "", text)
-    starts = [i for i, ch in enumerate(t) if ch in "{["]
-    for start in starts:
-        depth = 0
-        in_str = False
-        esc = False
-        for i in range(start, len(t)):
-            ch = t[i]
-            if in_str:
-                if esc:
-                    esc = False
-                elif ch == "\\":
-                    esc = True
-                elif ch == '"':
-                    in_str = False
-                continue
-            if ch == '"':
-                in_str = True
-            elif ch in "{[":
-                depth += 1
-            elif ch in "}]":
-                depth -= 1
-                if depth == 0:
-                    candidate = t[start : i + 1]
-                    try:
-                        json.loads(candidate)
-                        return candidate
-                    except ValueError:
-                        break
+    for start in (i for i, ch in enumerate(t) if ch in "{["):
+        try:
+            _, end = _DECODER.raw_decode(t, start)
+        except json.JSONDecodeError:
+            continue
+        return t[start:end]
     return None
 
 

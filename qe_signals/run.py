@@ -23,20 +23,31 @@ so a delayed manual run never silently loses a few days of signals.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import re
 import subprocess
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from qe_signals import digest as digest_mod
 from qe_signals import fetch as fetch_mod
 from qe_signals import rank as rank_mod
-from qe_signals.models import IdeaResult, SourceHealth, file_sha, sha256_text
-from qe_signals.registry import PLAYBOOK_DEFAULT, REGISTRY_DEFAULT, RegistryError, load_registry
+from qe_signals.ideate import API_ERROR_PREFIX, ideate_all, projected_calls
+from qe_signals.llm import LLM, CallBudget
+from qe_signals.models import IdeaResult, SourceHealth, SourceStatus, sha256_text
+from qe_signals.registry import (
+    PLAYBOOK_DEFAULT,
+    REGISTRY_DEFAULT,
+    RegistryError,
+    enabled_sources,
+    load_registry,
+)
 
 EXIT = {"green": 0, "orange": 10, "red": 20}
 LIGHT = {"green": "🟢 GREEN", "orange": "🟠 REVIEW", "red": "🔴 RED"}
@@ -68,12 +79,12 @@ def decide(
         return "red", ["no signals fetched"], notes
     if n_clusters == 0:
         return "red", ["no clusters after rank"], notes
-    if results and all(r.best is None and r.reason.startswith("api_error") for r in results):
+    if results and all(r.best is None and r.reason.startswith(API_ERROR_PREFIX) for r in results):
         return "red", [f"llm unavailable: {results[0].reason}"], notes
     for h in health:
-        if h.status == "failed":
+        if h.status == SourceStatus.FAILED:
             reasons.append(f"source failed: {h.name} ({h.error})")
-        elif h.status == "empty":
+        elif h.status == SourceStatus.EMPTY:
             reasons.append(f"source empty: {h.name}")
     for r in results:
         if r.best is None:
@@ -238,77 +249,71 @@ def main(
     now = now or datetime.now(UTC)
     root = Path(args.run_root)
     notes: list[str] = []
+    finish = functools.partial(_finish, notes=notes, args=args)
 
     # ── fail-closed preamble: registry, playbook, lock — before any spend ──
+    registry_path = Path(args.registry)
     try:
         reg_kwargs = {"resolver": resolver} if resolver else {}
-        reg = load_registry(Path(args.registry), **reg_kwargs)
+        reg = load_registry(registry_path, **reg_kwargs)
     except RegistryError as e:
-        return _finish("red", [str(e)], notes, args, None, None)
+        return finish("red", [str(e)])
     playbook_path = Path(args.playbook)
-    if not playbook_path.exists() or not playbook_path.read_text(encoding="utf-8").strip():
-        return _finish(
-            "red", [f"playbook missing or empty: {playbook_path}"], notes, args, None, None
-        )
-    playbook = playbook_path.read_text(encoding="utf-8")
+    playbook = playbook_path.read_text(encoding="utf-8") if playbook_path.exists() else ""
+    if not playbook.strip():
+        return finish("red", [f"playbook missing or empty: {playbook_path}"])
     try:
         lock_note = acquire_lock(root, os.getpid(), pid_alive)
     except RuntimeError as e:
-        return _finish("red", [str(e)], notes, args, None, None)
+        return finish("red", [str(e)])
     if lock_note:
         notes.append(lock_note)
 
+    # registry + playbook text identify this run's configuration in the run-dir name
+    config_sha = sha256_text(registry_path.read_text(encoding="utf-8") + playbook)
+    deps = Deps(http=http, resolver=resolver, llm_client=llm_client, runner=runner, sleep=sleep)
     try:
-        return _pipeline(
-            args,
-            reg,
-            playbook,
-            playbook_path,
-            root,
-            now,
-            notes,
-            http,
-            resolver,
-            llm_client,
-            runner,
-            sleep,
-        )
+        return _pipeline(args, reg, playbook, config_sha, root, now, notes, finish, deps)
     finally:
         release_lock(root)
 
 
-def _pipeline(
-    args, reg, playbook, playbook_path, root, now, notes, http, resolver, llm_client, runner, sleep
-):
-    from qe_signals.registry import enabled_sources
+@dataclass
+class Deps:
+    """Test seams; every field None means 'use the real thing'."""
 
+    http: Any = None
+    resolver: Any = None
+    llm_client: Any = None
+    runner: Callable[[list[str], float], tuple[int, str]] = default_runner
+    sleep: Any = None
+
+
+def _pipeline(args, reg, playbook, config_sha, root, now, notes, finish, deps: Deps):
     entries = enabled_sources(reg)
     prior = last_delivered_run(root)
     since, window_note = resolve_window(args.since, prior, now)
     log(f"[run] window: {window_note} (since {since.isoformat(timespec='minutes')})")
 
-    config_sha = sha256_text(Path(args.registry).read_text(encoding="utf-8") + playbook)
     run_dir = fetch_mod.new_run_dir(root, config_sha, int(now.timestamp() * 1000))
     log(f"[run] run dir: {run_dir}")
 
     # ── fetch ──
-    fkw = {}
-    if http:
-        fkw["http"] = http
-    if resolver:
-        fkw["resolver"] = resolver
-    if sleep:
-        fkw["sleep"] = sleep
+    fkw = {
+        k: v
+        for k, v in (("http", deps.http), ("resolver", deps.resolver), ("sleep", deps.sleep))
+        if v
+    }
     signals, health = fetch_mod.fetch_all(entries, since, log=log, **fkw)
     fetch_mod.write_raw(run_dir, signals, health)
     if not signals:
-        return _finish("red", ["no signals fetched"], notes, args, run_dir, None, health=health)
+        return finish("red", ["no signals fetched"], run_dir, None, health=health)
 
     # ── rank ──
     vocab = rank_mod.Vocab.load()
     kept, scores, clusters = rank_mod.rank(signals, now, vocab)
     if not clusters:
-        return _finish("red", ["no clusters after rank"], notes, args, run_dir, None, health=health)
+        return finish("red", ["no clusters after rank"], run_dir, None, health=health)
     seen = rank_mod.ideated_ids_from_backlog(prior / "backlog.json" if prior else None)
     fresh, skipped_seen = rank_mod.skip_seen(clusters, seen)
     sig_map = {s.id: s for s in kept}
@@ -319,8 +324,6 @@ def _pipeline(
         f"[rank] {len(kept)} signals → {len(clusters)} clusters "
         f"({len(skipped_seen)} already ideated)"
     )
-
-    from qe_signals.ideate import ideate_all, projected_calls
 
     projected = projected_calls(len(fresh), args.max_ideas, args.max_iter, args.max_calls)
     if args.dry_run:
@@ -353,9 +356,7 @@ def _pipeline(
         return EXIT["green"]
 
     # ── ideate ──
-    from qe_signals.llm import LLM, CallBudget
-
-    llm = LLM(llm_client, model=args.model, budget=CallBudget(args.max_calls))
+    llm = LLM(deps.llm_client, model=args.model, budget=CallBudget(args.max_calls))
     results, skipped_budget = ideate_all(
         fresh,
         sig_map,
@@ -375,7 +376,7 @@ def _pipeline(
         since=since,
         window_note=window_note,
         model=llm.model,
-        playbook_sha=file_sha(playbook_path),
+        playbook_sha=sha256_text(playbook),
         health=health,
         signals=sig_map,
         scores=scores,
@@ -399,7 +400,7 @@ def _pipeline(
 
     cognee_ok: bool | None = None
     if not args.no_cognee:
-        code, tail = runner(
+        code, tail = deps.runner(
             [
                 cognee_python(),
                 str(Path(__file__).with_name("cognee_push.py")),
@@ -424,13 +425,11 @@ def _pipeline(
         doomed = fetch_mod.prune_run_dirs(root, args.keep)
         if doomed:
             log(f"[run] pruned {len(doomed)} old run dir(s)")
-    return _finish(
-        verdict, reasons, notes, args, run_dir, digest_path, health=health, results=results
-    )
+    return finish(verdict, reasons, run_dir, digest_path, health=health, results=results)
 
 
 def _finish(
-    verdict, reasons, notes, args, run_dir, digest_path, *, health=None, results=None
+    verdict, reasons, run_dir=None, digest_path=None, *, notes, args, health=None, results=None
 ) -> int:
     code = EXIT[verdict]
     if args.json:

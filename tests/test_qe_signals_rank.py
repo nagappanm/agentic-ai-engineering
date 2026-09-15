@@ -155,12 +155,6 @@ def test_empty_input_gives_empty_clusters():
     assert kept == [] and scores == {} and clusters == []
 
 
-def test_top_clusters_orders_by_total_score():
-    _, _, clusters = rank.rank(_ten(), NOW, VOCAB)
-    top = rank.top_clusters(clusters, 2)
-    assert len(top) == 2 and top[0].total_score >= top[1].total_score
-
-
 # ── skip_seen ───────────────────────────────────────────────────────────────
 
 

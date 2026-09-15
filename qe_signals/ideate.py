@@ -22,6 +22,10 @@ from qe_signals.llm import LLM, BudgetExceeded
 from qe_signals.models import Cluster, Idea, IdeaResult, IterationRecord, Judgement, Signal
 
 MAX_CONSECUTIVE_API_ERRORS = 3
+REASON_BUDGET = "budget"
+REASON_INVALID_OUTPUT = "invalid_output"
+REASON_NO_JUDGED = "no_judged_iteration"
+API_ERROR_PREFIX = "api_error"
 WEIGHT_RE = re.compile(r"^###\s+([a-z0-9_]+)\s*\(weight\s+(\d+(?:\.\d+)?)\)", re.M)
 
 
@@ -54,10 +58,13 @@ def ideate_cluster(
     max_iter: int = 3,
     seen_titles: set[str] | None = None,
     log: Callable[[str], None] = lambda m: None,
+    weights: dict[str, float] | None = None,
+    known_ids: set[str] | None = None,
+    known_urls: set[str] | None = None,
 ) -> IdeaResult:
-    weights = playbook_weights(playbook)
-    known_ids = set(signals)
-    known_urls = {s.url for s in signals.values()}
+    weights = weights if weights is not None else playbook_weights(playbook)
+    known_ids = known_ids if known_ids is not None else set(signals)
+    known_urls = known_urls if known_urls is not None else {s.url for s in signals.values()}
     seen_titles = seen_titles if seen_titles is not None else set()
 
     records: list[IterationRecord] = []
@@ -66,6 +73,20 @@ def ideate_cluster(
     idea: Idea | None = None
     guard_text = ""
     fix_list: list[str] = []
+
+    def result(reason: str, *, met_bar: bool | None = None) -> IdeaResult:
+        return IdeaResult(
+            cluster_key=cluster.key_term,
+            best=best,
+            best_score=best_score,
+            met_bar=(
+                met_bar
+                if met_bar is not None
+                else bool(best_score is not None and best_score >= bar)
+            ),
+            iterations=records,
+            reason=reason,
+        )
 
     try:
         for n in range(1, max_iter + 1):
@@ -97,14 +118,7 @@ def ideate_cluster(
                         )
                     )
                     log(f"[ideate] {cluster.key_term}: invalid output twice — cluster abandoned")
-                    return IdeaResult(
-                        cluster_key=cluster.key_term,
-                        best=best,
-                        best_score=best_score,
-                        met_bar=False,
-                        iterations=records,
-                        reason="invalid_output",
-                    )
+                    return result(REASON_INVALID_OUTPUT, met_bar=False)
             idea = parsed.data
             report = guardrails.check(idea, known_ids, known_urls, seen_titles)
             guard_text = report.as_text()
@@ -151,36 +165,15 @@ def ideate_cluster(
                 break
     except BudgetExceeded:
         log(f"[ideate] {cluster.key_term}: LLM call budget exhausted")
-        return IdeaResult(
-            cluster_key=cluster.key_term,
-            best=best,
-            best_score=best_score,
-            met_bar=bool(best_score is not None and best_score >= bar),
-            iterations=records,
-            reason="budget",
-        )
+        return result(REASON_BUDGET)
     except Exception as e:  # noqa: BLE001 — an API/network error is an outcome, not a crash
-        msg = f"api_error: {type(e).__name__}: {str(e)[:160]}"
+        msg = f"{API_ERROR_PREFIX}: {type(e).__name__}: {str(e)[:160]}"
         log(f"[ideate] {cluster.key_term}: {msg}")
-        return IdeaResult(
-            cluster_key=cluster.key_term,
-            best=best,
-            best_score=best_score,
-            met_bar=bool(best_score is not None and best_score >= bar),
-            iterations=records,
-            reason=msg,
-        )
+        return result(msg)
 
     if best is not None:
         seen_titles.add(best.title.strip().lower())
-    return IdeaResult(
-        cluster_key=cluster.key_term,
-        best=best,
-        best_score=best_score,
-        met_bar=bool(best_score is not None and best_score >= bar),
-        iterations=records,
-        reason="" if best is not None else "no_judged_iteration",
-    )
+    return result("" if best is not None else REASON_NO_JUDGED)
 
 
 def ideate_all(
@@ -198,6 +191,9 @@ def ideate_all(
     results: list[IdeaResult] = []
     skipped_budget: list[Cluster] = []
     seen_titles: set[str] = set()
+    weights = playbook_weights(playbook)
+    known_ids = set(signals)
+    known_urls = {s.url for s in signals.values()}
     budget_out = False
     consecutive_errors = 0
     for c in clusters[:max_ideas]:
@@ -208,12 +204,23 @@ def ideate_all(
             skipped_budget.append(c)
             continue
         r = ideate_cluster(
-            c, signals, playbook, llm, bar=bar, max_iter=max_iter, seen_titles=seen_titles, log=log
+            c,
+            signals,
+            playbook,
+            llm,
+            bar=bar,
+            max_iter=max_iter,
+            seen_titles=seen_titles,
+            log=log,
+            weights=weights,
+            known_ids=known_ids,
+            known_urls=known_urls,
         )
         results.append(r)
-        if r.reason == "budget":
+        if r.reason == REASON_BUDGET:
             budget_out = True
-        consecutive_errors = consecutive_errors + 1 if r.reason.startswith("api_error") else 0
+        is_api_error = r.reason.startswith(API_ERROR_PREFIX)
+        consecutive_errors = consecutive_errors + 1 if is_api_error else 0
     results.sort(key=lambda r: (-(r.best_score or -1), r.cluster_key))
     return results, skipped_budget
 

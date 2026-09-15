@@ -170,6 +170,19 @@ def test_no_leaks_no_script_no_home_paths():
     assert md.count("/Users/") == 1
 
 
+def test_url_with_parens_or_spaces_is_percent_encoded_in_link():
+    sig = _sig("s9", "Weird", 'https://a.example/x)(y z"q')
+    md = digest.render_markdown(
+        _model(
+            signals={"s9": sig},
+            scores={"s9": {"score": 1.0}},
+            clusters=[Cluster(key_term="k", member_ids=["s9"], top_score=1, total_score=1)],
+            results=[],
+        )
+    )
+    assert "[Weird](https://a.example/x%29%28y%20z%22q)" in md
+
+
 def test_javascript_url_is_never_a_link():
     md = digest.render_markdown(_model())
     assert "](javascript:" not in md

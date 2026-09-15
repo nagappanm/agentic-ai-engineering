@@ -24,7 +24,7 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import urljoin, urlparse, urlunparse
@@ -32,7 +32,15 @@ from xml.etree import ElementTree as ET
 
 import certifi
 
-from qe_signals.models import Signal, SourceEntry, SourceHealth, SourceKind, sha256_text
+from qe_signals.models import (
+    Signal,
+    SourceEntry,
+    SourceHealth,
+    SourceKind,
+    SourceStatus,
+    sha256_text,
+    strip_tags,
+)
 from qe_signals.registry import Resolver, check_url, default_resolver
 
 USER_AGENT = (
@@ -145,14 +153,8 @@ def signal_id(url: str) -> str:
     return sha256_text(canonical_url(url))[:16]
 
 
-_TAG_RE = re.compile(r"<[^>]+>")
-_WS_RE = re.compile(r"\s+")
-
-
 def strip_html(text: str, limit: int = MAX_SUMMARY_CHARS) -> str:
-    t = html.unescape(_TAG_RE.sub(" ", text or ""))
-    t = _WS_RE.sub(" ", t).strip()
-    return t[:limit]
+    return html.unescape(strip_tags(text))[:limit]
 
 
 def parse_date(value: str | None) -> datetime | None:
@@ -352,16 +354,29 @@ def fetch_source(
     resolver: Resolver = default_resolver,
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
+    deadline: float | None = None,
 ) -> tuple[list[Signal], SourceHealth]:
     """Fetch one source. Never raises: every outcome is a SourceHealth."""
     t0 = clock()
     attempts = 0
+
+    def health(status: SourceStatus, **kw) -> SourceHealth:
+        return SourceHealth(
+            name=entry.name, status=status, elapsed_ms=int((clock() - t0) * 1000), **kw
+        )
+
     try:
         if entry.min_interval_s:
             sleep(entry.min_interval_s)
         if entry.kind == SourceKind.SITEMAP_HTML:
             signals, undated, attempts = _fetch_sitemap_html(
-                entry, since, http=http, resolver=resolver, sleep=sleep
+                entry,
+                since,
+                http=http,
+                resolver=resolver,
+                sleep=sleep,
+                clock=clock,
+                deadline=deadline,
             )
         else:
             body, attempts = get(
@@ -369,32 +384,25 @@ def fetch_source(
             )
             signals, undated = PARSERS[entry.kind](entry, since, body)
     except FetchError as e:
-        return [], SourceHealth(
-            name=entry.name,
-            status="failed",
-            attempts=max(attempts, e.attempts),
-            error=str(e)[:300],
-            elapsed_ms=int((clock() - t0) * 1000),
+        # attempts may already be non-zero when a parser raised after a successful get()
+        return [], health(
+            SourceStatus.FAILED, attempts=max(attempts, e.attempts), error=str(e)[:300]
         )
     except Exception as e:  # noqa: BLE001 — a parser bug must not kill the run
-        return [], SourceHealth(
-            name=entry.name,
-            status="failed",
-            attempts=attempts or 1,
-            error=f"{type(e).__name__}: {e}"[:300],
-            elapsed_ms=int((clock() - t0) * 1000),
+        return [], health(
+            SourceStatus.FAILED, attempts=attempts or 1, error=f"{type(e).__name__}: {e}"[:300]
         )
-    return signals, SourceHealth(
-        name=entry.name,
-        status="ok" if signals else "empty",
+    return signals, health(
+        SourceStatus.OK if signals else SourceStatus.EMPTY,
         items=len(signals),
         undated=undated,
         attempts=attempts,
-        elapsed_ms=int((clock() - t0) * 1000),
     )
 
 
-def _fetch_sitemap_html(entry, since, *, http, resolver, sleep) -> tuple[list[Signal], int, int]:
+def _fetch_sitemap_html(
+    entry, since, *, http, resolver, sleep, clock, deadline
+) -> tuple[list[Signal], int, int]:
     body, attempts = get(
         entry.url, http=http, timeout_s=entry.timeout_s, resolver=resolver, sleep=sleep
     )
@@ -411,6 +419,8 @@ def _fetch_sitemap_html(entry, since, *, http, resolver, sleep) -> tuple[list[Si
             continue
         if picked >= entry.max_pages:
             break
+        if deadline is not None and clock() > deadline:
+            break  # the stage budget applies inside a source too, not only between sources
         picked += 1
         if entry.min_interval_s:
             sleep(entry.min_interval_s)
@@ -443,17 +453,21 @@ def fetch_all(
     log: Callable[[str], None] = lambda m: print(m, file=sys.stderr),
 ) -> tuple[list[Signal], list[SourceHealth]]:
     """Fetch every entry inside a total budget; sources past the budget are `failed: budget`."""
-    t0 = clock()
+    deadline = clock() + budget_s
     signals: list[Signal] = []
     health: list[SourceHealth] = []
     for entry in entries:
-        if clock() - t0 > budget_s:
+        if clock() > deadline:
             health.append(
-                SourceHealth(name=entry.name, status="failed", error="stage budget exhausted")
+                SourceHealth(
+                    name=entry.name, status=SourceStatus.FAILED, error="stage budget exhausted"
+                )
             )
             log(f"[fetch] {entry.name}: skipped — stage budget exhausted")
             continue
-        sigs, h = fetch_source(entry, since, http=http, resolver=resolver, sleep=sleep, clock=clock)
+        sigs, h = fetch_source(
+            entry, since, http=http, resolver=resolver, sleep=sleep, clock=clock, deadline=deadline
+        )
         signals.extend(sigs)
         health.append(h)
         note = f" ({h.error})" if h.error else ""
@@ -495,10 +509,6 @@ def write_raw(run_dir: Path, signals: list[Signal], health: list[SourceHealth]) 
     (run_dir / "sources.json").write_text(
         json.dumps([h.model_dump(mode="json") for h in health], indent=1), encoding="utf-8"
     )
-
-
-def since_from(days: float, now: datetime) -> datetime:
-    return now - timedelta(days=days)
 
 
 __all__ = [

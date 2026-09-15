@@ -8,9 +8,9 @@ silently-tolerated one.
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import datetime
 from enum import StrEnum
-from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
@@ -24,6 +24,12 @@ class SourceKind(StrEnum):
     GITHUB = "github"  # GitHub search/repositories
     ARXIV = "arxiv"  # arXiv export API
     SITEMAP_HTML = "sitemap_html"  # sitemap.xml → filtered <loc> → HTML → text
+
+
+class SourceStatus(StrEnum):
+    OK = "ok"
+    EMPTY = "empty"
+    FAILED = "failed"
 
 
 class SourceEntry(BaseModel):
@@ -80,7 +86,7 @@ class Signal(BaseModel):
 
 class SourceHealth(BaseModel):
     name: str
-    status: str  # ok | empty | failed
+    status: SourceStatus
     items: int = 0
     undated: int = 0
     attempts: int = 1
@@ -143,5 +149,10 @@ def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def file_sha(path: Path) -> str:
-    return sha256_text(path.read_text(encoding="utf-8"))
+_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"\s+")
+
+
+def strip_tags(text: str) -> str:
+    """Drop <...> tags and collapse whitespace. No unescaping, no markdown escaping."""
+    return _WS_RE.sub(" ", _TAG_RE.sub(" ", text or "")).strip()
