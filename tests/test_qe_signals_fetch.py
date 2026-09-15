@@ -28,7 +28,7 @@ def _entry(name="src", kind=SourceKind.RSS, url="https://feed.example/rss", **kw
 
 
 def _http_ok(body: bytes):
-    def http(url, headers, timeout):
+    def http(url, headers, timeout, addr=None):
         return 200, url, body
 
     return http
@@ -109,7 +109,7 @@ def test_arxiv_window_and_query_url():
 def test_sitemap_html_filters_prefix_and_window_then_extracts_text():
     calls: list[str] = []
 
-    def http(url, headers, timeout):
+    def http(url, headers, timeout, addr=None):
         calls.append(url)
         if url.endswith("sitemap.xml"):
             return 200, url, (FIX / "sitemap.xml").read_bytes()
@@ -134,7 +134,7 @@ def test_sitemap_html_filters_prefix_and_window_then_extracts_text():
 def test_url_error_records_failed_health_without_raising():
     import urllib.error
 
-    def http(url, headers, timeout):
+    def http(url, headers, timeout, addr=None):
         raise urllib.error.URLError("boom")
 
     sigs, h = fetch.fetch_source(_entry(), SINCE, http=http, resolver=_public, sleep=lambda s: None)
@@ -146,7 +146,7 @@ def test_429_then_200_retries_once():
     seq = iter([429, 200])
     slept: list[float] = []
 
-    def http(url, headers, timeout):
+    def http(url, headers, timeout, addr=None):
         return next(seq), url, (FIX / "rss.xml").read_bytes()
 
     sigs, h = fetch.fetch_source(_entry(), SINCE, http=http, resolver=_public, sleep=slept.append)
@@ -164,7 +164,7 @@ def test_200_with_zero_in_window_items_is_empty_not_failed():
 
 
 def test_timeout_records_failed_timeout_and_other_sources_continue():
-    def http(url, headers, timeout):
+    def http(url, headers, timeout, addr=None):
         if "slow" in url:
             raise TimeoutError("timed out")
         return 200, url, (FIX / "rss.xml").read_bytes()
@@ -189,7 +189,7 @@ def test_canonical_id_ignores_query_fragment_and_trailing_slash():
 def test_redirect_to_private_host_is_refused_before_connecting():
     connected: list[str] = []
 
-    def http(url, headers, timeout):
+    def http(url, headers, timeout, addr=None):
         connected.append(url)
         return 302, "http://169.254.169.254/latest/meta-data", b""
 
@@ -204,7 +204,7 @@ def test_redirect_to_private_host_is_refused_before_connecting():
 
 
 def test_redirect_chain_longer_than_cap_fails():
-    def http(url, headers, timeout):
+    def http(url, headers, timeout, addr=None):
         return 301, url + "/r", b""
 
     sigs, h = fetch.fetch_source(_entry(), SINCE, http=http, resolver=_public, sleep=lambda s: None)
@@ -245,3 +245,141 @@ def test_run_dir_written_and_pruned(tmp_path: Path):
     doomed = fetch.prune_run_dirs(root, keep=2)
     assert doomed == [dirs[0]] and fetch.list_run_dirs(root) == dirs[1:]
     assert dirs[0].name == "run-000000000001000-abcdef01"
+
+
+# ── review fixes: pinned connect, body cap, per-URL retries, sitemap failures, ids ──
+
+
+def test_http_receives_the_vetted_address_and_rebinding_is_refused():
+    """DNS rebinding: the address vetted by policy is the one the transport connects to."""
+    seen_addrs: list[str | None] = []
+    answers = iter([["93.184.216.34"], ["10.0.0.9"]])  # public for the check, private next time
+
+    def resolver(host):
+        return next(answers)
+
+    def http(url, headers, timeout, addr=None):
+        seen_addrs.append(addr)
+        return 302, url + "/next", b""  # one redirect → policy re-vets and re-pins
+
+    sigs, h = fetch.fetch_source(
+        _entry(), SINCE, http=http, resolver=resolver, sleep=lambda s: None
+    )
+    assert seen_addrs == ["93.184.216.34"]  # first hop connected to the vetted address
+    assert h.status == "failed" and "blocked address 10.0.0.9" in h.error  # second hop refused
+
+
+def test_unresolvable_host_is_refused_not_fetched():
+    called = []
+
+    def http(url, headers, timeout, addr=None):
+        called.append(url)
+        return 200, url, b""
+
+    sigs, h = fetch.fetch_source(
+        _entry(), SINCE, http=http, resolver=lambda host: [], sleep=lambda s: None
+    )
+    assert h.status == "failed" and "unresolvable host" in h.error and called == []
+
+
+def test_oversize_body_is_a_failed_source_not_an_unbounded_read():
+    def http(url, headers, timeout, addr=None):
+        raise fetch.BodyTooLarge("body exceeds 10485760 bytes")
+
+    sigs, h = fetch.fetch_source(_entry(), SINCE, http=http, resolver=_public, sleep=lambda s: None)
+    assert h.status == "failed" and "exceeds" in h.error and h.attempts == 1
+
+
+def test_read_capped_raises_past_limit():
+    class R:
+        def __init__(self, n):
+            self.n = n
+
+        def read(self, k=-1):
+            return b"x" * min(self.n, k if k > 0 else self.n)
+
+    assert len(fetch._read_capped(R(10))) == 10
+    with pytest.raises(fetch.BodyTooLarge):
+        fetch._read_capped(R(fetch.MAX_BODY_BYTES + 5))
+
+
+def test_redirect_then_5xx_still_gets_full_retry_budget():
+    seq = iter([301, 503, 503, 200])
+    slept: list[float] = []
+
+    def http(url, headers, timeout, addr=None):
+        st = next(seq)
+        return st, (url + "/r" if st == 301 else url), (FIX / "rss.xml").read_bytes()
+
+    sigs, h = fetch.fetch_source(_entry(), SINCE, http=http, resolver=_public, sleep=slept.append)
+    assert h.status == "ok" and h.attempts == 4 and slept == [1.0, 2.0]
+
+
+def test_retries_stop_at_the_deadline():
+    t = iter([0.0] + [1000.0] * 10)
+
+    def http(url, headers, timeout, addr=None):
+        return 503, url, b""
+
+    with pytest.raises(fetch.FetchError, match="HTTP 503"):
+        fetch.get(
+            "https://feed.example/rss",
+            http=http,
+            resolver=_public,
+            sleep=lambda s: None,
+            clock=lambda: next(t),
+            deadline=10.0,
+        )
+
+
+def test_sitemap_all_pages_failed_is_failed_not_empty():
+    def http(url, headers, timeout, addr=None):
+        if url.endswith("sitemap.xml"):
+            return 200, url, (FIX / "sitemap.xml").read_bytes()
+        return 403, url, b""
+
+    e = _entry(
+        kind=SourceKind.SITEMAP_HTML, url="https://site.example/sitemap.xml", path_prefix="/blog/"
+    )
+    sigs, h = fetch.fetch_source(e, SINCE, http=http, resolver=_public, sleep=lambda s: None)
+    assert h.status == "failed" and "all 1 selected page(s) failed" in h.error and "403" in h.error
+
+
+def test_canonical_id_keeps_identifying_query_but_drops_tracking():
+    a = fetch.signal_id("https://news.ycombinator.com/item?id=1002")
+    b = fetch.signal_id("https://news.ycombinator.com/item?id=1003")
+    assert a != b
+    assert fetch.signal_id("https://a.com/x?utm_source=rss&fbclid=1") == fetch.signal_id(
+        "https://a.com/x"
+    )
+    assert fetch.signal_id("https://y.com/watch?v=abc") != fetch.signal_id(
+        "https://y.com/watch?v=def"
+    )
+
+
+def test_two_hn_text_posts_survive_dedupe():
+    from qe_signals import rank
+
+    body = json.dumps(
+        {
+            "hits": [
+                {
+                    "objectID": "1",
+                    "title": "Ask HN: flaky tests?",
+                    "url": None,
+                    "created_at": "2026-09-11T00:00:00Z",
+                },
+                {
+                    "objectID": "2",
+                    "title": "Ask HN: traceability?",
+                    "url": None,
+                    "created_at": "2026-09-11T00:00:00Z",
+                },
+            ]
+        }
+    ).encode()
+    sigs, _ = _fetch(
+        _entry(kind=SourceKind.HN, url="https://hn.algolia.com/api/v1/search_by_date?query=x"), body
+    )
+    assert len({s.id for s in sigs}) == 2
+    assert len(rank.dedupe(sigs, rank.Vocab.load())) == 2

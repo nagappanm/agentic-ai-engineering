@@ -16,8 +16,10 @@ fixture bytes. Policy that lives here:
 from __future__ import annotations
 
 import html
+import http.client
 import json
 import re
+import socket
 import ssl
 import sys
 import time
@@ -27,7 +29,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 from xml.etree import ElementTree as ET
 
 import certifi
@@ -41,7 +43,7 @@ from qe_signals.models import (
     sha256_text,
     strip_tags,
 )
-from qe_signals.registry import Resolver, check_url, default_resolver
+from qe_signals.registry import Resolver, default_resolver, vet_url
 
 USER_AGENT = (
     "qe-signals/0.1 (+https://github.com/nagappanm/agentic-ai-engineering; weekly QE digest)"
@@ -49,12 +51,15 @@ USER_AGENT = (
 MAX_REDIRECTS = 5
 MAX_ATTEMPTS = 3
 BACKOFF_BASE_S = 1.0
+MAX_BODY_BYTES = 10 * 1024 * 1024  # generous for any feed, sitemap or article page
 MAX_SUMMARY_CHARS = 1500
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
 
-# (url, headers, timeout_s) -> (status, final_url, body)
-Http = Callable[[str, dict[str, str], float], tuple[int, str, bytes]]
+# (url, headers, timeout_s, pinned_addr) -> (status, final_url, body)
+# `pinned_addr` is the vetted IP the policy layer resolved; the transport MUST connect
+# to it (with Host/SNI still set to the hostname) rather than resolving the name again.
+Http = Callable[[str, dict[str, str], float, str | None], tuple[int, str, bytes]]
 
 
 class FetchError(Exception):
@@ -81,17 +86,59 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def urllib_http(url: str, headers: dict[str, str], timeout_s: float) -> tuple[int, str, bytes]:
+class BodyTooLarge(Exception):
+    pass
+
+
+def _read_capped(resp) -> bytes:
+    data = resp.read(MAX_BODY_BYTES + 1)
+    if len(data) > MAX_BODY_BYTES:
+        raise BodyTooLarge(f"body exceeds {MAX_BODY_BYTES} bytes")
+    return data
+
+
+def _pinned_opener(addr: str | None, ctx: ssl.SSLContext) -> urllib.request.OpenerDirector:
+    """An opener that connects to `addr` (already vetted) while keeping Host and SNI.
+
+    This closes the DNS-rebinding gap: the name was resolved once for the policy
+    check and that exact address is what we connect to.
+    """
+    if addr is None:
+        return urllib.request.build_opener(_NoRedirect, urllib.request.HTTPSHandler(context=ctx))
+
+    class _PinnedHTTP(http.client.HTTPConnection):
+        def connect(self):
+            self.sock = socket.create_connection((addr, self.port), self.timeout)
+
+    class _PinnedHTTPS(http.client.HTTPSConnection):
+        def connect(self):
+            sock = socket.create_connection((addr, self.port), self.timeout)
+            self.sock = ctx.wrap_socket(sock, server_hostname=self.host)
+
+    class _H(urllib.request.HTTPHandler):
+        def http_open(self, req):
+            return self.do_open(_PinnedHTTP, req)
+
+    class _HS(urllib.request.HTTPSHandler):
+        def https_open(self, req):
+            return self.do_open(_PinnedHTTPS, req)
+
+    return urllib.request.build_opener(_NoRedirect, _H, _HS)
+
+
+def urllib_http(
+    url: str, headers: dict[str, str], timeout_s: float, addr: str | None = None
+) -> tuple[int, str, bytes]:
     """One request, no automatic redirects (the policy layer follows them)."""
     ctx = ssl.create_default_context(cafile=certifi.where())
-    opener = urllib.request.build_opener(_NoRedirect, urllib.request.HTTPSHandler(context=ctx))
+    opener = _pinned_opener(addr, ctx)
     req = urllib.request.Request(url, headers=headers)
     try:
         with opener.open(req, timeout=timeout_s) as resp:  # noqa: S310
-            return resp.status, resp.geturl(), resp.read()
+            return resp.status, resp.geturl(), _read_capped(resp)
     except urllib.error.HTTPError as e:
         loc = e.headers.get("Location", "") if e.headers else ""
-        body = e.read() if e.fp else b""
+        body = _read_capped(e) if e.fp else b""
         return e.code, loc or url, body
 
 
@@ -103,38 +150,53 @@ def get(
     resolver: Resolver = default_resolver,
     sleep: Callable[[float], None] = time.sleep,
     accept: str = "*/*",
+    clock: Callable[[], float] = time.monotonic,
+    deadline: float | None = None,
 ) -> tuple[bytes, int]:
-    """Policy-enforcing GET: block private hosts on every hop, cap redirects, back off.
+    """Policy-enforcing GET: vet + pin the host on every hop, cap redirects, back off.
 
-    Returns (body, attempts). Raises FetchError on any terminal failure.
+    Returns (body, attempts). Raises FetchError on any terminal failure. `attempts`
+    counts every request made; retries are per URL (`tries`) so a redirect hop does
+    not eat the retry budget of the URL it lands on. No retry starts past `deadline`.
     """
     headers = {"User-Agent": USER_AGENT, "Accept": accept}
     attempts = 0
+    tries = 0
     current = url
     hops = 0
+
+    def backoff_or_raise(msg: str, exc: BaseException | None = None) -> None:
+        if tries < MAX_ATTEMPTS and (deadline is None or clock() < deadline):
+            sleep(BACKOFF_BASE_S * (2 ** (tries - 1)))
+            return
+        raise FetchError(msg, attempts) from exc
+
     while True:
-        reason = check_url(current, resolver)
+        reason, addrs = vet_url(current, resolver)
         if reason:
-            raise BlockedHost(f"blocked host: {reason} ({current})")
+            raise BlockedHost(f"blocked host: {reason} ({current})", attempts)
+        pinned = addrs[0] if addrs else None
         attempts += 1
+        tries += 1
         try:
-            status, final_url, body = http(current, headers, timeout_s)
+            status, final_url, body = http(current, headers, timeout_s, pinned)
+        except BodyTooLarge as e:
+            raise FetchError(str(e), attempts) from e
         except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
-            if attempts < MAX_ATTEMPTS:
-                sleep(BACKOFF_BASE_S * (2 ** (attempts - 1)))
-                continue
-            raise FetchError(f"{type(e).__name__}: {e}", attempts) from e
+            backoff_or_raise(f"{type(e).__name__}: {e}", e)
+            continue
         if status in (301, 302, 303, 307, 308):
             hops += 1
             if hops > MAX_REDIRECTS:
-                raise TooManyRedirects(f"too many redirects (> {MAX_REDIRECTS}) from {url}")
+                raise TooManyRedirects(
+                    f"too many redirects (> {MAX_REDIRECTS}) from {url}", attempts
+                )
             current = urljoin(current, final_url)
+            tries = 0
             continue
         if status == 429 or status >= 500:
-            if attempts < MAX_ATTEMPTS:
-                sleep(BACKOFF_BASE_S * (2 ** (attempts - 1)))
-                continue
-            raise FetchError(f"HTTP {status} after {attempts} attempts", attempts)
+            backoff_or_raise(f"HTTP {status} after {tries} attempts")
+            continue
         if status >= 400:
             raise FetchError(f"HTTP {status}", attempts)
         return body, attempts
@@ -143,10 +205,25 @@ def get(
 # ── normalisation helpers ───────────────────────────────────────────────────
 
 
+TRACKING_PARAMS = {"fbclid", "gclid", "ref", "source", "utm"}
+
+
+def _is_tracking(key: str) -> bool:
+    k = key.lower()
+    return k in TRACKING_PARAMS or k.startswith("utm_")
+
+
 def canonical_url(url: str) -> str:
+    """Lower-case scheme/host, strip trailing slash and fragment, drop only tracking params.
+
+    `?id=` / `?v=` identify distinct resources (HN items, YouTube videos) and must survive.
+    """
     p = urlparse(url.strip())
     path = p.path.rstrip("/") or "/"
-    return urlunparse((p.scheme.lower(), p.netloc.lower(), path, "", "", ""))
+    kept = sorted(
+        (k, v) for k, v in parse_qsl(p.query, keep_blank_values=True) if not _is_tracking(k)
+    )
+    return urlunparse((p.scheme.lower(), p.netloc.lower(), path, "", urlencode(kept), ""))
 
 
 def signal_id(url: str) -> str:
@@ -380,7 +457,13 @@ def fetch_source(
             )
         else:
             body, attempts = get(
-                entry.url, http=http, timeout_s=entry.timeout_s, resolver=resolver, sleep=sleep
+                entry.url,
+                http=http,
+                timeout_s=entry.timeout_s,
+                resolver=resolver,
+                sleep=sleep,
+                clock=clock,
+                deadline=deadline,
             )
             signals, undated = PARSERS[entry.kind](entry, since, body)
     except FetchError as e:
@@ -404,11 +487,19 @@ def _fetch_sitemap_html(
     entry, since, *, http, resolver, sleep, clock, deadline
 ) -> tuple[list[Signal], int, int]:
     body, attempts = get(
-        entry.url, http=http, timeout_s=entry.timeout_s, resolver=resolver, sleep=sleep
+        entry.url,
+        http=http,
+        timeout_s=entry.timeout_s,
+        resolver=resolver,
+        sleep=sleep,
+        clock=clock,
+        deadline=deadline,
     )
     out: list[Signal] = []
     undated = 0
     picked = 0
+    page_failures = 0
+    last_err = ""
     for loc, lastmod in parse_sitemap(body):
         if entry.path_prefix and not urlparse(loc).path.startswith(entry.path_prefix):
             continue
@@ -425,8 +516,19 @@ def _fetch_sitemap_html(
         if entry.min_interval_s:
             sleep(entry.min_interval_s)
         try:
-            page, a = get(loc, http=http, timeout_s=entry.timeout_s, resolver=resolver, sleep=sleep)
-        except FetchError:
+            page, a = get(
+                loc,
+                http=http,
+                timeout_s=entry.timeout_s,
+                resolver=resolver,
+                sleep=sleep,
+                clock=clock,
+                deadline=deadline,
+            )
+        except FetchError as e:
+            page_failures += 1
+            last_err = str(e)
+            attempts += e.attempts
             continue
         attempts += a
         out.append(
@@ -438,6 +540,8 @@ def _fetch_sitemap_html(
                 extract_text(page, loc)[:MAX_SUMMARY_CHARS],
             )
         )
+    if picked and not out and page_failures:
+        raise FetchError(f"all {picked} selected page(s) failed: {last_err}", attempts)
     return out, undated, attempts
 
 

@@ -168,7 +168,7 @@ def test_lock_live_pid_refuses_and_stale_pid_replaced(tmp_path: Path):
 # ── CLI, in-process, on fixtures ────────────────────────────────────────────
 
 
-def _http_fixture(url, headers, timeout):
+def _http_fixture(url, headers, timeout, addr=None):
     if "rss" in url or "youtube" in url:
         return 200, url, (FIX / "rss.xml").read_bytes()
     if "hn.algolia" in url:
@@ -255,7 +255,7 @@ def test_registry_invalid_kind_is_red_and_fetch_never_runs(tmp_path: Path):
     reg = _registry(tmp_path, "sources:\n  - {name: bird, kind: twitter, url: https://x.com/f}\n")
     called = []
 
-    def http(url, h, t):
+    def http(url, h, t, addr=None):
         called.append(url)
         return 200, url, b""
 
@@ -277,7 +277,7 @@ def test_registry_invalid_kind_is_red_and_fetch_never_runs(tmp_path: Path):
 def test_missing_playbook_is_red_before_fetch(tmp_path: Path):
     called = []
 
-    def http(url, h, t):
+    def http(url, h, t, addr=None):
         called.append(url)
         return 200, url, b""
 
@@ -312,7 +312,7 @@ def test_live_lock_is_red(tmp_path: Path, capsys):
 
 
 def test_zero_signals_is_red(tmp_path: Path, capsys):
-    def http(url, h, t):
+    def http(url, h, t, addr=None):
         return 200, url, b'<rss version="2.0"><channel></channel></rss>'
 
     code = run.main(

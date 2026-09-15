@@ -10,6 +10,8 @@ from __future__ import annotations
 import ipaddress
 import socket
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -22,6 +24,7 @@ REGISTRY_DEFAULT = Path(__file__).with_name("sources.yaml")
 PLAYBOOK_DEFAULT = Path(__file__).with_name("dna_playbook.md")
 
 Resolver = Callable[[str], list[str]]
+DNS_TIMEOUT_S = 5.0
 
 
 class RegistryError(ValueError):
@@ -29,49 +32,68 @@ class RegistryError(ValueError):
 
 
 def default_resolver(host: str) -> list[str]:
-    """Resolve a hostname to its IP address strings (empty list if unresolvable)."""
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except (socket.gaierror, UnicodeError, OSError):
-        return []
+    """Resolve a hostname to its IP address strings (empty list if unresolvable or slow).
+
+    getaddrinfo has no timeout of its own; a hung resolver would stall the run before
+    the lock is even taken, so it runs in a helper thread bounded by DNS_TIMEOUT_S.
+    """
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        fut = pool.submit(socket.getaddrinfo, host, None)
+        try:
+            infos = fut.result(timeout=DNS_TIMEOUT_S)
+        except (socket.gaierror, UnicodeError, OSError, FutureTimeout):
+            return []
     return sorted({info[4][0] for info in infos})
 
 
-def is_blocked_host(host: str, resolver: Resolver = default_resolver) -> str:
-    """Return a reason string if `host` must not be fetched, else ''.
+def vet_host(host: str, resolver: Resolver = default_resolver) -> tuple[str, list[str]]:
+    """Return (reason, vetted_addresses). reason != '' means `host` must not be fetched.
 
     Blocks loopback, link-local (incl. 169.254.169.254 metadata), private RFC 1918,
     unspecified and multicast ranges — checked on the literal and on every resolved
-    address, so DNS pointing at an internal host is refused too.
+    address, so DNS pointing at an internal host is refused too. An unresolvable
+    host is refused (fail closed), and the addresses returned are the ones the
+    fetcher must connect to, so a second resolution at connect time cannot rebind.
     """
     if not host:
-        return "empty host"
+        return "empty host", []
     candidates: list[str] = []
     try:
         ipaddress.ip_address(host.strip("[]"))
         candidates = [host.strip("[]")]
     except ValueError:
         if host.lower() in {"localhost", "localhost.localdomain"}:
-            return "loopback host"
+            return "loopback host", []
         candidates = resolver(host)
+    if not candidates:
+        return "unresolvable host", []
     for addr in candidates:
         try:
             ip = ipaddress.ip_address(addr)
         except ValueError:
-            continue
+            return f"unparseable address {addr!r}", []
         if ip.is_loopback or ip.is_link_local or ip.is_private or ip.is_unspecified:
-            return f"blocked address {addr}"
+            return f"blocked address {addr}", []
         if ip.is_multicast or ip.is_reserved:
-            return f"blocked address {addr}"
-    return ""
+            return f"blocked address {addr}", []
+    return "", candidates
+
+
+def is_blocked_host(host: str, resolver: Resolver = default_resolver) -> str:
+    return vet_host(host, resolver)[0]
+
+
+def vet_url(url: str, resolver: Resolver = default_resolver) -> tuple[str, list[str]]:
+    """(reason, vetted_addresses) for a URL; reason != '' means do not fetch."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return f"scheme {parsed.scheme!r} not allowed", []
+    return vet_host(parsed.hostname or "", resolver)
 
 
 def check_url(url: str, resolver: Resolver = default_resolver) -> str:
     """Return a reason string if a URL is not fetchable under policy, else ''."""
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        return f"scheme {parsed.scheme!r} not allowed"
-    return is_blocked_host(parsed.hostname or "", resolver)
+    return vet_url(url, resolver)[0]
 
 
 def load_registry(
