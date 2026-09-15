@@ -153,10 +153,10 @@ class LLM:
         if self.budget is not None:
             self.budget.take()
         t0 = self._clock()
+        # no `temperature`: claude-sonnet-5 rejects it as deprecated; sampling defaults apply
         response = self.client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
-            temperature=0,
             system=system,
             messages=[{"role": "user", "content": user}],
         )

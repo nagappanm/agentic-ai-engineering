@@ -123,6 +123,33 @@ def test_clusters_sharing_title_tokens_merge():
     assert len(clusters) == 1 and set(clusters[0].member_ids) == {"a", "b"}
 
 
+def test_numeric_and_short_tokens_never_become_keys():
+    sigs = [_sig("a", "13 ways to 2026"), _sig("b", "2026 in review"), _sig("c", "!!!")]
+    _, _, clusters = rank.rank(sigs, NOW, VOCAB)
+    keys = {c.key_term for c in clusters}
+    assert not any(k.isdigit() for k in keys)
+    assert "misc" in keys  # the title with no usable token
+    assert all(k in {"way", "review", "misc"} for k in keys), keys
+
+
+def test_merge_is_pairwise_not_union_snowball():
+    a = [{"alpha", "beta", "kappa"}, {"beta", "kappa", "gamma"}]  # one merged cluster
+    d = [{"alpha", "gamma", "zeta"}]  # shares 2 with the UNION of a, but 1 with each title
+    assert not rank._titles_share(a, d)
+    assert rank._titles_share(a, [{"beta", "kappa", "omega"}])
+
+
+def test_cluster_total_score_is_top_three_not_sum_of_all():
+    words = ["apple", "brick", "cloud", "delta", "ember", "frost", "grape", "haze", "ivory", "jade"]
+    sigs = [_sig(f"y{i}", f"flaky {w}", days_ago=0.5 * i) for i, w in enumerate(words)]
+    _, scores, clusters = rank.rank(sigs, NOW, VOCAB)
+    c = clusters[0]
+    assert len(c.member_ids) == 10
+    top3 = sum(sorted((scores[m]["score"] for m in c.member_ids), reverse=True)[:3])
+    assert abs(c.total_score - top3) < 1e-6
+    assert c.total_score < sum(scores[m]["score"] for m in c.member_ids)
+
+
 def test_empty_input_gives_empty_clusters():
     kept, scores, clusters = rank.rank([], NOW, VOCAB)
     assert kept == [] and scores == {} and clusters == []

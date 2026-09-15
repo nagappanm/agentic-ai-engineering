@@ -21,6 +21,7 @@ VOCAB_DEFAULT = Path(__file__).with_name("vocab.yaml")
 HALF_LIFE_DAYS = 3.5
 NEAR_DUP_OVERLAP = 0.9
 MERGE_SHARED_TOKENS = 2
+TOP_N_FOR_CLUSTER_SCORE = 3  # a cluster ranks by its best signals, so a big junk bucket can't win
 
 _WORD_RE = re.compile(r"[a-z0-9][a-z0-9\-\.]*")
 
@@ -139,23 +140,34 @@ def stem(term: str) -> str:
     return term
 
 
+def _key_for(s: Signal, hits: dict[str, float], stopwords: set[str]) -> str:
+    if hits:
+        return stem(sorted(hits.items(), key=lambda kv: (-kv[1], kv[0]))[0][0])
+    # no vocabulary hit: first alphabetic token (never a bare number like "2026" or "13")
+    for tok in sorted(norm_tokens(s.title, stopwords)):
+        if any(ch.isalpha() for ch in tok) and len(tok) >= 3:
+            return stem(tok)
+    return "misc"
+
+
+def _titles_share(a: list[set[str]], b: list[set[str]]) -> bool:
+    """True if ANY title in a shares >= MERGE_SHARED_TOKENS tokens with ANY title in b.
+
+    Pairwise on titles, not on token unions — a union grows with every merge and
+    snowballs unrelated clusters together.
+    """
+    return any(len(x & y) >= MERGE_SHARED_TOKENS for x in a for y in b)
+
+
 def cluster(signals: list[Signal], scores: dict[str, dict], vocab: Vocab) -> list[Cluster]:
-    """Group by highest-weight shared vocabulary term, then merge clusters sharing title tokens."""
+    """Group by highest-weight vocabulary term, then merge clusters whose titles pair up."""
     groups: dict[str, list[Signal]] = {}
     for s in signals:
         hits = {**scores[s.id]["quality_hits"], **scores[s.id]["toolchain_hits"]}
-        if hits:
-            key = stem(sorted(hits.items(), key=lambda kv: (-kv[1], kv[0]))[0][0])
-        else:
-            toks = sorted(norm_tokens(s.title, vocab.stopwords))
-            key = stem(toks[0]) if toks else "misc"
-        groups.setdefault(key, []).append(s)
+        groups.setdefault(_key_for(s, hits, vocab.stopwords), []).append(s)
 
-    # merge clusters whose member titles share >= MERGE_SHARED_TOKENS significant tokens
     keys = sorted(groups)
-    tokens = {
-        k: set().union(*(norm_tokens(s.title, vocab.stopwords) for s in groups[k])) for k in keys
-    }
+    titles = {k: [norm_tokens(s.title, vocab.stopwords) for s in groups[k]] for k in keys}
     parent = {k: k for k in keys}
 
     def find(k):
@@ -166,7 +178,7 @@ def cluster(signals: list[Signal], scores: dict[str, dict], vocab: Vocab) -> lis
 
     for i, a in enumerate(keys):
         for b in keys[i + 1 :]:
-            if len(tokens[a] & tokens[b]) >= MERGE_SHARED_TOKENS:
+            if _titles_share(titles[a], titles[b]):
                 ra, rb = find(a), find(b)
                 if ra != rb:
                     parent[max(ra, rb)] = min(ra, rb)
@@ -183,7 +195,9 @@ def cluster(signals: list[Signal], scores: dict[str, dict], vocab: Vocab) -> lis
                 key_term=key,
                 member_ids=[m.id for m in members],
                 top_score=scores[members[0].id]["score"],
-                total_score=round(sum(scores[m.id]["score"] for m in members), 6),
+                total_score=round(
+                    sum(scores[m.id]["score"] for m in members[:TOP_N_FOR_CLUSTER_SCORE]), 6
+                ),
             )
         )
     return sorted(out, key=lambda c: (-c.total_score, c.key_term))

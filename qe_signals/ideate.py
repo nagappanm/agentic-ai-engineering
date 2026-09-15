@@ -21,6 +21,7 @@ from qe_signals import guardrails, prompts
 from qe_signals.llm import LLM, BudgetExceeded
 from qe_signals.models import Cluster, Idea, IdeaResult, IterationRecord, Judgement, Signal
 
+MAX_CONSECUTIVE_API_ERRORS = 3
 WEIGHT_RE = re.compile(r"^###\s+([a-z0-9_]+)\s*\(weight\s+(\d+(?:\.\d+)?)\)", re.M)
 
 
@@ -158,6 +159,17 @@ def ideate_cluster(
             iterations=records,
             reason="budget",
         )
+    except Exception as e:  # noqa: BLE001 — an API/network error is an outcome, not a crash
+        msg = f"api_error: {type(e).__name__}: {str(e)[:160]}"
+        log(f"[ideate] {cluster.key_term}: {msg}")
+        return IdeaResult(
+            cluster_key=cluster.key_term,
+            best=best,
+            best_score=best_score,
+            met_bar=bool(best_score is not None and best_score >= bar),
+            iterations=records,
+            reason=msg,
+        )
 
     if best is not None:
         seen_titles.add(best.title.strip().lower())
@@ -187,8 +199,12 @@ def ideate_all(
     skipped_budget: list[Cluster] = []
     seen_titles: set[str] = set()
     budget_out = False
+    consecutive_errors = 0
     for c in clusters[:max_ideas]:
         if budget_out or (llm.budget is not None and llm.budget.remaining == 0):
+            skipped_budget.append(c)
+            continue
+        if consecutive_errors >= MAX_CONSECUTIVE_API_ERRORS:
             skipped_budget.append(c)
             continue
         r = ideate_cluster(
@@ -197,6 +213,7 @@ def ideate_all(
         results.append(r)
         if r.reason == "budget":
             budget_out = True
+        consecutive_errors = consecutive_errors + 1 if r.reason.startswith("api_error") else 0
     results.sort(key=lambda r: (-(r.best_score or -1), r.cluster_key))
     return results, skipped_budget
 

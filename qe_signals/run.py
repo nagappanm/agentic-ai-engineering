@@ -68,6 +68,8 @@ def decide(
         return "red", ["no signals fetched"], notes
     if n_clusters == 0:
         return "red", ["no clusters after rank"], notes
+    if results and all(r.best is None and r.reason.startswith("api_error") for r in results):
+        return "red", [f"llm unavailable: {results[0].reason}"], notes
     for h in health:
         if h.status == "failed":
             reasons.append(f"source failed: {h.name} ({h.error})")
@@ -191,6 +193,14 @@ def default_runner(cmd: list[str], timeout_s: float) -> tuple[int, str]:
 # ── main ────────────────────────────────────────────────────────────────────
 
 
+def _load_dotenv() -> None:
+    try:
+        from dotenv import load_dotenv
+    except ImportError:  # pragma: no cover
+        return
+    load_dotenv()
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -224,6 +234,7 @@ def main(
     pid_alive: Callable[[int], bool] = _pid_alive,
 ) -> int:
     args = build_parser().parse_args(argv)
+    _load_dotenv()  # ANTHROPIC_API_KEY from the repo .env, like documind.config
     now = now or datetime.now(UTC)
     root = Path(args.run_root)
     notes: list[str] = []

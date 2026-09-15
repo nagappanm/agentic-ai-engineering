@@ -103,6 +103,18 @@ def test_decide_zero_clusters_red():
     assert v == "red" and r == ["no clusters after rank"]
 
 
+def test_decide_all_api_errors_is_red():
+    v, r, _ = run.decide(
+        [SourceHealth(name="a", status="ok", items=3)],
+        [_res(None, False, best=False, reason="api_error: AuthenticationError: bad key")],
+        cognee_ok=None,
+        n_items=3,
+        n_clusters=2,
+        skipped_seen=0,
+    )
+    assert v == "red" and "llm unavailable" in r[0] and "AuthenticationError" in r[0]
+
+
 def test_decide_all_seen_week_is_green_with_note():
     v, r, n = run.decide(
         [SourceHealth(name="a", status="ok", items=3)],

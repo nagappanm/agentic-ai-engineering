@@ -198,6 +198,23 @@ def test_call_budget_skips_remaining_clusters_and_still_returns():
     assert L.budget.used == 3
 
 
+def test_api_error_is_recorded_not_raised_and_breaker_trips():
+    class Boom:
+        def __init__(self):
+            self.messages = self
+
+        def create(self, **kw):
+            raise ConnectionError("dns down")
+
+    L = llm.LLM(Boom(), model="m")
+    results, skipped = ideate.ideate_all([C1, C2, C1, C2], SIGNALS, PLAYBOOK, L, max_ideas=8)
+    assert len(results) == ideate.MAX_CONSECUTIVE_API_ERRORS
+    assert all(
+        r.best is None and r.reason.startswith("api_error: ConnectionError") for r in results
+    )
+    assert len(skipped) == 1  # breaker tripped; the 4th cluster was not attempted
+
+
 def test_projected_calls():
     assert ideate.projected_calls(10, 8, 3, 60) == 48
     assert ideate.projected_calls(10, 8, 3, 20) == 20

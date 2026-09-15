@@ -86,7 +86,7 @@ def test_no_schema_sent_and_directive_appended():
     call = c.messages.calls[0]
     assert "tools" not in call and "response_format" not in call and "output_format" not in call
     assert "Output ONLY a single JSON value" in call["messages"][0]["content"]
-    assert call["temperature"] == 0
+    assert "temperature" not in call  # claude-sonnet-5 rejects it as deprecated
 
 
 def test_constructing_without_key_does_not_raise(monkeypatch):
