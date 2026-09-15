@@ -139,7 +139,7 @@ def test_top_clusters_orders_by_total_score():
 
 def test_skip_seen_only_when_every_member_was_ideated(tmp_path: Path):
     backlog = tmp_path / "backlog.json"
-    backlog.write_text(json.dumps({"results": [{"best": {"evidence": ["f1", "f2", "f3"]}}]}))
+    backlog.write_text(json.dumps({"ideated_ids": ["f1", "f2", "f3"], "results": []}))
     seen = rank.ideated_ids_from_backlog(backlog)
     _, _, clusters = rank.rank(_ten(), NOW, VOCAB)
     fresh, skipped = rank.skip_seen(clusters, seen)
@@ -149,6 +149,12 @@ def test_skip_seen_only_when_every_member_was_ideated(tmp_path: Path):
     seen2 = {"f1", "f2"}
     fresh2, skipped2 = rank.skip_seen(clusters, seen2)
     assert skipped2 == []
+
+
+def test_legacy_backlog_falls_back_to_evidence_union(tmp_path: Path):
+    backlog = tmp_path / "backlog.json"
+    backlog.write_text(json.dumps({"results": [{"best": {"evidence": ["f1", "f2"]}}]}))
+    assert rank.ideated_ids_from_backlog(backlog) == {"f1", "f2"}
 
 
 def test_no_prior_backlog_skips_nothing():

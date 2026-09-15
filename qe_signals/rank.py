@@ -197,14 +197,21 @@ def top_clusters(clusters: list[Cluster], n: int) -> list[Cluster]:
 
 
 def ideated_ids_from_backlog(backlog_path: Path | None) -> set[str]:
-    """Signal ids cited as evidence by any idea in a previous run's backlog.json."""
+    """Signal ids that were members of an ideated cluster in the previous run.
+
+    Reads `ideated_ids` from backlog.json; falls back to the union of cited evidence
+    for older files. A cluster is "seen" only if EVERY member is in this set, so one
+    new signal keeps a story fresh.
+    """
     if backlog_path is None or not backlog_path.exists():
         return set()
     try:
         data = json.loads(backlog_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return set()
-    ids: set[str] = set()
+    ids: set[str] = set(data.get("ideated_ids") or [])
+    if ids:
+        return ids
     for r in data.get("results", []):
         best = r.get("best") or {}
         ids.update(best.get("evidence", []))

@@ -27,7 +27,7 @@ sources:
 
   - name: software-testing-weekly
     kind: rss
-    url: https://softwaretestingweekly.com/rss/
+    url: https://softwaretestingweekly.com/issues/rss/  # /rss/ and /feed/ 404 since 2026-09
     weight: 0.8
     tags: [newsletter, curated]
 
@@ -63,26 +63,32 @@ sources:
     tags: [llm-eval, vendor]
 
   # ── YouTube channels (titles + descriptions only) ─────────────────────────
+  # 2026-09-15: youtube.com/feeds/videos.xml returns 404 + consent redirect from this
+  # network for every channel id tried; disabled until a run sees 200. Re-enable to test.
   - name: yt-ministry-of-testing
     kind: rss
+    enabled: false
     url: https://www.youtube.com/feeds/videos.xml?channel_id=UCG-ZnPKunTkEsY7xcaZcOQg
     weight: 0.6
     tags: [video, community]
 
   - name: yt-testguild
     kind: rss
+    enabled: false
     url: https://www.youtube.com/feeds/videos.xml?channel_id=UC1IuOajCAtHvLyZgkIK47dQ
     weight: 0.5
     tags: [video, practice]
 
   - name: yt-automation-step-by-step
     kind: rss
+    enabled: false
     url: https://www.youtube.com/feeds/videos.xml?channel_id=UCTt7pyY-o0eltq14glaG5dg
     weight: 0.4
     tags: [video, tutorial]
 
   - name: yt-playwright
     kind: rss
+    enabled: false
     url: https://www.youtube.com/feeds/videos.xml?channel_id=UC46Zj8pDH5tDosqm1gd7WTg
     weight: 0.7
     tags: [video, playwright]
@@ -159,7 +165,7 @@ sources:
     tags: [github, agents]
     min_interval_s: 6
 
-  # ── arXiv (≈1 req / 3 s) ──────────────────────────────────────────────────
+  # ── arXiv (≈1 req / 3 s; throttles an IP for a while after a burst → shows as failed) ──
   - name: arxiv-llm-testing
     kind: arxiv
     url: http://export.arxiv.org/api/query?search_query=cat:cs.SE+AND+abs:%22LLM%20testing%22&sortBy=submittedDate&sortOrder=descending&max_results=25

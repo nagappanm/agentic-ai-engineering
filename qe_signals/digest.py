@@ -248,11 +248,12 @@ def render_markdown(m: dict) -> str:
     return "\n".join(out)
 
 
-def backlog_json(m: dict, results: list[IdeaResult]) -> str:
+def backlog_json(m: dict, results: list[IdeaResult], ideated_ids: list[str] | None = None) -> str:
     return json.dumps(
         {
             "run_id": m["run_id"],
             "generated": m["generated"],
+            "ideated_ids": sorted(ideated_ids or []),
             "results": [r.model_dump(mode="json") for r in results],
         },
         indent=1,
