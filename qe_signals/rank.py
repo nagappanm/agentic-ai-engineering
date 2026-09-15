@@ -20,6 +20,7 @@ from qe_signals.models import Cluster, Signal
 VOCAB_DEFAULT = Path(__file__).with_name("vocab.yaml")
 HALF_LIFE_DAYS = 3.5
 NEAR_DUP_OVERLAP = 0.9
+NEAR_DUP_MIN_TOKENS = 3  # a 1–2 token title is a subset of too many longer ones to be a dup
 MERGE_SHARED_TOKENS = 2
 TOP_N_FOR_CLUSTER_SCORE = 3  # a cluster ranks by its best signals, so a big junk bucket can't win
 
@@ -78,7 +79,11 @@ def dedupe(signals: Iterable[Signal], vocab: Vocab) -> list[Signal]:
         toks = norm_tokens(s.title, vocab.stopwords)
         dup = False
         for kt in kept_tokens:
-            if toks and kt and _token_overlap(toks, kt) >= NEAR_DUP_OVERLAP:
+            if (
+                len(toks) >= NEAR_DUP_MIN_TOKENS
+                and len(kt) >= NEAR_DUP_MIN_TOKENS
+                and _token_overlap(toks, kt) >= NEAR_DUP_OVERLAP
+            ):
                 dup = True
                 break
         if not dup:

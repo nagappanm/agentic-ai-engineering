@@ -29,6 +29,7 @@ import os
 import re
 import subprocess
 import sys
+import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -71,6 +72,8 @@ def decide(
     n_items: int,
     n_clusters: int,
     skipped_seen: int,
+    skipped_budget: int = 0,
+    skipped_errors: int = 0,
 ) -> tuple[str, list[str], list[str]]:
     """Return (verdict, reasons, notes). Pure; trivially unit-tested."""
     reasons: list[str] = []
@@ -91,6 +94,10 @@ def decide(
             reasons.append(f"cluster {r.cluster_key}: no idea ({r.reason})")
         elif not r.met_bar:
             reasons.append(f"idea below bar: {r.best.title} ({r.best_score:.0f})")
+    if skipped_budget:
+        reasons.append(f"{skipped_budget} cluster(s) skipped: LLM call budget exhausted")
+    if skipped_errors:
+        reasons.append(f"{skipped_errors} cluster(s) skipped after repeated LLM API errors")
     if cognee_ok is False:
         notes.append("cognee push failed — digest is on disk; re-run cognee_push.py by hand")
     if not results and skipped_seen:
@@ -137,10 +144,18 @@ def resolve_window(explicit: str | None, prior: Path | None, now: datetime) -> t
     return prior_t, f"since last run {prior.name} ({gap.days}d ago)"
 
 
+DELIVERED_MARKER = "delivered"
+
+
 def last_delivered_run(root: Path) -> Path | None:
-    """Newest run dir that wrote backlog.json — dry runs and aborted runs never count."""
+    """Newest run dir that finished with a non-red verdict.
+
+    Dry runs, aborted runs and red runs (LLM unavailable, nothing fetched) never
+    count, so a broken week does not become the anchor that drops its signals from
+    the next window. The marker is written only after decide() runs.
+    """
     for d in reversed(fetch_mod.list_run_dirs(root)):
-        if (d / "backlog.json").exists():
+        if (d / DELIVERED_MARKER).exists():
             return d
     return None
 
@@ -158,24 +173,50 @@ def _pid_alive(pid: int) -> bool:
     return True
 
 
+_LOCK_HANDLES: dict[Path, Any] = {}
+
+
 def acquire_lock(root: Path, pid: int, alive: Callable[[int], bool] = _pid_alive) -> str | None:
-    """None on success, or a note if a stale lock was replaced; RuntimeError if live."""
+    """None on success, or a note if a stale lock was replaced; RuntimeError if live.
+
+    The real guard is an advisory flock on an open handle held for the whole run —
+    the kernel drops it when the process dies, so a SIGKILL or a reused pid can
+    never wedge future runs. The pid in the file is only for the error message;
+    `alive` is consulted only when flock is unavailable (non-POSIX).
+    """
     root.mkdir(parents=True, exist_ok=True)
     lock = root / ".lock"
-    note = None
+    old = 0
     if lock.exists():
         try:
             old = int(lock.read_text().strip() or "0")
         except ValueError:
             old = 0
+    fh = open(lock, "a+")  # noqa: SIM115 — deliberately held open for the run
+    try:
+        import fcntl
+
+        try:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            fh.close()
+            raise RuntimeError(f"run in progress (pid {old or '?'}) — lock {lock}") from None
+    except ImportError:  # pragma: no cover — Windows fallback: pid liveness only
         if old and alive(old):
-            raise RuntimeError(f"run in progress (pid {old}) — lock {lock}")
-        note = f"stale lock replaced (pid {old})"
-    lock.write_text(str(pid))
-    return note
+            fh.close()
+            raise RuntimeError(f"run in progress (pid {old}) — lock {lock}") from None
+    fh.seek(0)
+    fh.truncate()
+    fh.write(str(pid))
+    fh.flush()
+    _LOCK_HANDLES[root] = fh
+    return f"stale lock replaced (pid {old})" if old else None
 
 
 def release_lock(root: Path) -> None:
+    fh = _LOCK_HANDLES.pop(root, None)
+    if fh is not None:
+        fh.close()  # closing releases the flock
     try:
         (root / ".lock").unlink()
     except FileNotFoundError:
@@ -212,6 +253,13 @@ def _load_dotenv() -> None:
     load_dotenv()
 
 
+def _at_least_two(text: str) -> int:
+    n = int(text)
+    if n < 2:
+        raise argparse.ArgumentTypeError("--max-calls must be >= 2 (one draft + one judge)")
+    return n
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -222,7 +270,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--max-ideas", type=int, default=8)
     ap.add_argument("--bar", type=float, default=75.0)
     ap.add_argument("--max-iter", type=int, default=3)
-    ap.add_argument("--max-calls", type=int, default=60)
+    ap.add_argument("--max-calls", type=_at_least_two, default=60)
     ap.add_argument("--model", default=None)
     ap.add_argument("--keep", type=int, default=12)
     ap.add_argument("--out", default="docs/qe-signals")
@@ -262,6 +310,10 @@ def main(
     playbook = playbook_path.read_text(encoding="utf-8") if playbook_path.exists() else ""
     if not playbook.strip():
         return finish("red", [f"playbook missing or empty: {playbook_path}"])
+    if not args.dry_run and llm_client is None and not os.getenv("ANTHROPIC_API_KEY"):
+        return finish(
+            "red", ["ANTHROPIC_API_KEY not set — refusing to start a run that cannot ideate"]
+        )
     try:
         lock_note = acquire_lock(root, os.getpid(), pid_alive)
     except RuntimeError as e:
@@ -274,6 +326,9 @@ def main(
     deps = Deps(http=http, resolver=resolver, llm_client=llm_client, runner=runner, sleep=sleep)
     try:
         return _pipeline(args, reg, playbook, config_sha, root, now, notes, finish, deps)
+    except Exception as e:  # noqa: BLE001 — a crash is a red verdict, never a bare traceback
+        log(traceback.format_exc())
+        return finish("red", [f"unhandled error: {type(e).__name__}: {e}"])
     finally:
         release_lock(root)
 
@@ -391,6 +446,12 @@ def _pipeline(args, reg, playbook, config_sha, root, now, notes, finish, deps: D
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     digest_path = out_dir / digest_mod.digest_filename(now)
+    if digest_path.exists() and _frontmatter_run_id(digest_path) not in (None, run_dir.name):
+        # same ISO week, different run: keep the published digest, write alongside it
+        digest_path = out_dir / f"{digest_path.stem}-{run_dir.name[-8:]}.md"
+        notes.append(
+            f"a digest for this week already exists; wrote {digest_path.name} alongside it"
+        )
     digest_path.write_text(digest_mod.render_markdown(model), encoding="utf-8")
     ideated_keys = {res.cluster_key for res in results if res.best is not None}
     ideated_ids = [m for c in fresh if c.key_term in ideated_keys for m in c.member_ids]
@@ -420,13 +481,26 @@ def _pipeline(args, reg, playbook, config_sha, root, now, notes, finish, deps: D
         n_items=len(signals),
         n_clusters=len(clusters),
         skipped_seen=len(skipped_seen),
+        skipped_budget=len(skipped_budget),
+        skipped_errors=len(skipped_errors),
     )
     notes.extend(dnotes)
+    if verdict != "red":
+        (run_dir / DELIVERED_MARKER).write_text(verdict, encoding="utf-8")
     if args.keep > 0:
         doomed = fetch_mod.prune_run_dirs(root, args.keep)
         if doomed:
             log(f"[run] pruned {len(doomed)} old run dir(s)")
     return finish(verdict, reasons, run_dir, digest_path, health=health, results=results)
+
+
+def _frontmatter_run_id(path: Path) -> str | None:
+    try:
+        head = path.read_text(encoding="utf-8")[:400]
+    except OSError:
+        return None
+    m = re.search(r'^run_id:\s*"?([^"\n]+)"?', head, re.M)
+    return m.group(1).strip() if m else None
 
 
 def _finish(
@@ -443,6 +517,8 @@ def _finish(
                     "notes": notes,
                     "digest_path": str(digest_path) if digest_path else None,
                     "run_dir": str(run_dir) if run_dir else None,
+                    "backlog_path": str(run_dir / "backlog.json") if run_dir else None,
+                    "trace_path": str(run_dir / "trace.json") if run_dir else None,
                     "sources": [h.model_dump() for h in (health or [])],
                     "ideas": [
                         {

@@ -48,6 +48,12 @@ def test_near_duplicate_titles_keep_higher_weight():
     assert [s.id for s in out] == ["b"]
 
 
+def test_short_title_is_not_swallowed_by_a_longer_one():
+    short = _sig("a", "Flaky tests", weight=0.4)
+    longer = _sig("b", "Flaky tests in CI pipelines explained", weight=0.9)
+    assert len(rank.dedupe([short, longer], VOCAB)) == 2
+
+
 def test_distinct_titles_both_survive():
     out = rank.dedupe(
         [_sig("a", "Flaky tests in CI"), _sig("b", "Requirement traceability with Jira")], VOCAB

@@ -63,8 +63,13 @@ def _load_env() -> None:
 async def push(docs: list[str]) -> int:
     import cognee  # noqa: PLC0415 — only importable in the cognee venv
 
-    await cognee.add(docs, dataset_name=DATASET)
-    await cognee.cognify(datasets=[DATASET])
+    step = "add"
+    try:
+        await cognee.add(docs, dataset_name=DATASET)
+        step = "cognify"
+        await cognee.cognify(datasets=[DATASET])
+    except Exception as e:  # noqa: BLE001
+        raise RuntimeError(f"{step} failed ({type(e).__name__}: {e})") from e
     return len(docs)
 
 
@@ -97,7 +102,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         n = asyncio.run(push(docs))
     except Exception as e:  # noqa: BLE001 — surface anything; run.py turns it into an amber note
-        print(f"[cognee_push] failed: {type(e).__name__}: {e}", file=sys.stderr)
+        # 'add failed' = nothing pushed; 'cognify failed' = documents stored but not yet graphed
+        print(f"[cognee_push] {e}", file=sys.stderr)
         return 1
     print(f"[cognee_push] pushed {n} documents to dataset {DATASET}", file=sys.stderr)
     return 0

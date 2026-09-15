@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -155,14 +156,34 @@ def test_parse_duration_rejects_garbage():
 # ── lock ────────────────────────────────────────────────────────────────────
 
 
-def test_lock_live_pid_refuses_and_stale_pid_replaced(tmp_path: Path):
-    (tmp_path / ".lock").write_text("4242")
+def _hold_flock(path: Path):
+    import fcntl
+
+    fh = open(path, "a+")
+    fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    return fh
+
+
+def test_lock_held_by_live_process_refuses_and_stale_lock_is_replaced(tmp_path: Path):
+    lock = tmp_path / ".lock"
+    lock.write_text("4242")
+    holder = _hold_flock(lock)  # simulates a live run holding the flock
     with pytest.raises(RuntimeError, match="run in progress"):
-        run.acquire_lock(tmp_path, 1, alive=lambda pid: True)
-    note = run.acquire_lock(tmp_path, 1, alive=lambda pid: False)
-    assert "stale lock replaced" in note and (tmp_path / ".lock").read_text() == "1"
+        run.acquire_lock(tmp_path, 1)
+    holder.close()  # the process died: kernel dropped the flock, pid 4242 is stale
+    note = run.acquire_lock(tmp_path, 1)
+    assert "stale lock replaced (pid 4242)" in note and lock.read_text() == "1"
     run.release_lock(tmp_path)
-    assert not (tmp_path / ".lock").exists()
+    assert not lock.exists()
+
+
+def test_stale_lock_with_reused_pid_does_not_block(tmp_path: Path):
+    (tmp_path / ".lock").write_text(
+        str(os.getpid())
+    )  # our own live pid, but nobody holds the flock
+    note = run.acquire_lock(tmp_path, 1)
+    assert "stale lock replaced" in note
+    run.release_lock(tmp_path)
 
 
 # ── CLI, in-process, on fixtures ────────────────────────────────────────────
@@ -301,13 +322,17 @@ def test_live_lock_is_red(tmp_path: Path, capsys):
     root = tmp_path / "runs"
     root.mkdir()
     (root / ".lock").write_text("999999")
-    code = run.main(
-        [*_common(tmp_path), "--json"],
-        http=_http_fixture,
-        resolver=_resolver,
-        now=NOW,
-        pid_alive=lambda pid: True,
-    )
+    holder = _hold_flock(root / ".lock")
+    try:
+        code = run.main(
+            [*_common(tmp_path), "--json"],
+            http=_http_fixture,
+            resolver=_resolver,
+            llm_client=_Client(),
+            now=NOW,
+        )
+    finally:
+        holder.close()
     assert code == 20 and "run in progress" in json.loads(capsys.readouterr().out)["reasons"][0]
 
 
@@ -316,7 +341,12 @@ def test_zero_signals_is_red(tmp_path: Path, capsys):
         return 200, url, b'<rss version="2.0"><channel></channel></rss>'
 
     code = run.main(
-        [*_common(tmp_path), "--json"], http=http, resolver=_resolver, now=NOW, sleep=lambda s: None
+        [*_common(tmp_path), "--json"],
+        http=http,
+        resolver=_resolver,
+        llm_client=_Client(),
+        now=NOW,
+        sleep=lambda s: None,
     )
     assert code == 20 and "no signals fetched" in json.loads(capsys.readouterr().out)["reasons"]
 
@@ -468,6 +498,83 @@ def test_dry_run_is_not_a_prior_run(tmp_path: Path, capsys):
     assert "no prior run" in capsys.readouterr().err
 
 
+def test_missing_api_key_is_red_before_fetch(tmp_path: Path, monkeypatch, capsys):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(run, "_load_dotenv", lambda: None)
+    called = []
+
+    def http(url, h, t, addr=None):
+        called.append(url)
+        return 200, url, b""
+
+    code = run.main([*_common(tmp_path), "--json"], http=http, resolver=_resolver, now=NOW)
+    assert code == 20 and called == []
+    assert "ANTHROPIC_API_KEY" in json.loads(capsys.readouterr().out)["reasons"][0]
+
+
+def test_decide_skipped_budget_is_orange():
+    v, r, _ = run.decide(
+        [SourceHealth(name="a", status="ok", items=3)],
+        [],
+        cognee_ok=None,
+        n_items=3,
+        n_clusters=2,
+        skipped_seen=0,
+        skipped_budget=2,
+    )
+    assert v == "orange" and "budget exhausted" in r[0]
+
+
+def test_max_calls_below_two_is_rejected():
+    with pytest.raises(SystemExit):
+        run.build_parser().parse_args(["--max-calls", "1"])
+
+
+def test_red_run_is_not_a_prior_run_and_unhandled_error_is_red(tmp_path: Path, capsys):
+    class Boom:
+        def __init__(self):
+            self.messages = self
+
+        def create(self, **kw):
+            raise ConnectionError("api down")
+
+    common = _common(tmp_path)
+    code = run.main(
+        [*common, "--no-cognee", "--json"],
+        http=_http_fixture,
+        resolver=_resolver,
+        llm_client=Boom(),
+        now=NOW,
+        sleep=lambda s: None,
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert code == 20 and "llm unavailable" in out["reasons"][0]
+    assert run.last_delivered_run(tmp_path / "runs") is None  # red run does not anchor the window
+    assert out["backlog_path"].endswith("backlog.json") and out["trace_path"].endswith("trace.json")
+
+    import qe_signals.fetch as f
+
+    orig = f.write_raw
+    f.write_raw = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("disk on fire"))
+    try:
+        code = run.main(
+            [*common, "--no-cognee", "--json"],
+            http=_http_fixture,
+            resolver=_resolver,
+            llm_client=_Client(),
+            now=NOW + timedelta(hours=1),
+            sleep=lambda s: None,
+        )
+    finally:
+        f.write_raw = orig
+    captured = capsys.readouterr()
+    assert (
+        code == 20
+        and "unhandled error: RuntimeError: disk on fire" in json.loads(captured.out)["reasons"][0]
+    )
+    assert "Traceback" in captured.err  # logged, not raised
+
+
 def test_all_seen_second_run_is_green_with_nothing_new(tmp_path: Path, capsys):
     common = _common(tmp_path)
     assert (
@@ -491,4 +598,8 @@ def test_all_seen_second_run_is_green_with_nothing_new(tmp_path: Path, capsys):
         sleep=lambda s: None,
     )
     out = json.loads(capsys.readouterr().out)
-    assert code == 0 and out["ideas"] == [] and "nothing new this week" in out["notes"][0]
+    assert code == 0 and out["ideas"] == []
+    assert any("nothing new this week" in n for n in out["notes"])
+    assert any(
+        "already exists; wrote" in n for n in out["notes"]
+    )  # same-week rerun kept the first digest
