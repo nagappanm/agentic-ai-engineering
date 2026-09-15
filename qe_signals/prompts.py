@@ -24,9 +24,18 @@ DATA_RULES = (
 )
 
 
-def render_signals(cluster: Cluster, signals: dict[str, Signal], max_chars: int = 900) -> str:
+MAX_MEMBERS_IN_PROMPT = 12  # member_ids are score-sorted; an 82-signal cluster stays bounded
+
+
+def render_signals(
+    cluster: Cluster,
+    signals: dict[str, Signal],
+    max_chars: int = 900,
+    max_members: int = MAX_MEMBERS_IN_PROMPT,
+) -> str:
     lines = []
-    for sid in cluster.member_ids:
+    shown = cluster.member_ids[:max_members]
+    for sid in shown:
         s = signals.get(sid)
         if not s:
             continue
@@ -35,6 +44,9 @@ def render_signals(cluster: Cluster, signals: dict[str, Signal], max_chars: int 
             f"  url: {s.url}\n"
             f"  text: {s.summary[:max_chars]}"
         )
+    hidden = len(cluster.member_ids) - len(shown)
+    if hidden > 0:
+        lines.append(f"(+{hidden} lower-scoring signals in this cluster not shown)")
     return "\n".join(lines)
 
 

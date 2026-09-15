@@ -96,8 +96,12 @@ def test_fetch_forecast_formats_daily_rows(monkeypatch) -> None:
         if "geocoding" in url:
             return {
                 "results": [
-                    {"name": "London", "country": "United Kingdom",
-                     "latitude": 51.5, "longitude": -0.1}
+                    {
+                        "name": "London",
+                        "country": "United Kingdom",
+                        "latitude": 51.5,
+                        "longitude": -0.1,
+                    }
                 ]
             }
         return {

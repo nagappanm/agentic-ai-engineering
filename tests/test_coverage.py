@@ -7,6 +7,7 @@ as unexplored. `test_role_locator_joins_without_test_id` and
 `test_state_gated_role_tier_entry_is_fuzzy_matched` pin that down — both were
 real false negatives observed against the todomvc cache.
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -31,21 +32,25 @@ def make_cache() -> dict:
         "selectors": {
             "todo.newInput": {
                 "selector": "getByRole('textbox', { name: 'New todo' })",
-                "tier": "role", "page": "/",
+                "tier": "role",
+                "page": "/",
             },
             "todo.list": {
                 "selector": "getByTestId('todo-list')",
-                "tier": "testid", "page": "/",
+                "tier": "testid",
+                "page": "/",
             },
             "todo.clearCompleted": {
                 "selector": "getByRole('button', { name: 'Clear completed' })",
-                "tier": "role", "page": "/",
+                "tier": "role",
+                "page": "/",
             },
         },
     }
 
 
 # --- join keys ----------------------------------------------------------------
+
 
 def test_testid_locator_yields_tid_key():
     assert ("tid", "todo-list") in join_keys("getByTestId('todo-list')")
@@ -59,7 +64,7 @@ def test_role_locator_joins_without_test_id():
 
 
 def test_css_locator_pinning_a_test_attribute_yields_tid_key():
-    keys = join_keys('locator(\'[data-automation-id="submit-btn"]\')')
+    keys = join_keys("locator('[data-automation-id=\"submit-btn\"]')")
     assert ("tid", "submit-btn") in keys
 
 
@@ -75,10 +80,9 @@ def test_name_keys_are_case_and_whitespace_insensitive():
 
 # --- source scan --------------------------------------------------------------
 
+
 def test_scan_source_reads_all_three_default_attributes():
-    html = (
-        '<input data-automation-id="a"><div data-testid="b"><span data-test="c">'
-    )
+    html = '<input data-automation-id="a"><div data-testid="b"><span data-test="c">'
     assert scan_source(html) == {"a", "b", "c"}
 
 
@@ -94,6 +98,7 @@ def test_scan_source_finds_ids_in_unrendered_markup():
 
 
 # --- reconciliation -----------------------------------------------------------
+
 
 def test_harvested_and_cached_element_is_covered():
     harvest = [{"role": "textbox", "name": "New todo", "tid": None}]
@@ -161,6 +166,7 @@ def test_unslug_maps_test_id_to_accessible_name():
 
 # --- tier 2: alt text / title are user-facing ---------------------------------
 
+
 def test_alt_text_and_title_locators_yield_name_keys():
     """An image-only link with alt="Home" is tier 2, not tier 3 — it must join."""
     assert ("name", "home") in join_keys("getByAltText('Home')")
@@ -176,6 +182,7 @@ def test_alt_text_cached_entry_is_covered_not_reported_new():
 
 
 # --- configured testIdAttribute mismatch --------------------------------------
+
 
 def test_scan_source_by_attr_records_the_attribute_each_id_came_from():
     html = '<i data-automation-id="a"><b data-test="b">'
@@ -221,7 +228,7 @@ def test_covered_is_deduped_by_logical_name():
     cache = {"selectors": {"todo.list": {"selector": "getByTestId('todo-list')", "tier": "testid"}}}
     harvest = [
         {"role": "list", "name": "Todo list", "tid": "todo-list"},
-        {"role": None, "name": "", "tid": "todo-list"},   # same element, tid-only record
+        {"role": None, "name": "", "tid": "todo-list"},  # same element, tid-only record
     ]
     r = reconcile(cache, set(), harvest)
     assert len(r["covered"]) == 1

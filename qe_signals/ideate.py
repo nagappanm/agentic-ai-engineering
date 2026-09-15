@@ -35,17 +35,24 @@ def playbook_weights(playbook: str) -> dict[str, float]:
 
 
 def weighted_score(per_criterion: dict[str, float], weights: dict[str, float]) -> float:
+    """Weighted mean over EVERY playbook criterion; one the judge omitted scores 0.
+
+    Normalising over only the returned keys would let a judge inflate the score by
+    leaving out the criteria it scored badly.
+    """
     if not per_criterion:
         return 0.0
     if not weights:
         return round(sum(per_criterion.values()) / len(per_criterion), 2)
-    num = 0.0
-    den = 0.0
-    for name, w in weights.items():
-        if name in per_criterion:
-            num += w * max(0.0, min(100.0, float(per_criterion[name])))
-            den += w
+    den = sum(weights.values())
+    num = sum(
+        w * max(0.0, min(100.0, float(per_criterion.get(name, 0.0)))) for name, w in weights.items()
+    )
     return round(num / den, 2) if den else 0.0
+
+
+def missing_criteria(per_criterion: dict[str, float], weights: dict[str, float]) -> list[str]:
+    return sorted(set(weights) - set(per_criterion))
 
 
 def ideate_cluster(
@@ -143,7 +150,11 @@ def ideate_cluster(
             jparsed = llm.structured(jsys, juser, Judgement, stage=f"judge:{cluster.key_term}")
             if jparsed.valid:
                 score = weighted_score(jparsed.data.per_criterion, weights)
-                fix_list = jparsed.data.fix_list
+                fix_list = list(jparsed.data.fix_list)
+                missing = missing_criteria(jparsed.data.per_criterion, weights)
+                if missing:
+                    fix_list.append(f"judge omitted criteria (scored 0): {', '.join(missing)}")
+                    log(f"[ideate] {cluster.key_term} iter {n}: judge omitted {missing}")
             else:
                 score = 0.0
                 fix_list = ["previous judge reply was not valid JSON; keep the idea concrete"]
@@ -186,10 +197,16 @@ def ideate_all(
     bar: float = 75.0,
     max_iter: int = 3,
     log: Callable[[str], None] = lambda m: None,
-) -> tuple[list[IdeaResult], list[Cluster]]:
-    """Ideate the top `max_ideas` clusters. Returns (results, clusters skipped for budget)."""
+) -> tuple[list[IdeaResult], list[Cluster], list[Cluster]]:
+    """Ideate the top `max_ideas` clusters.
+
+    Returns (results, skipped_budget, skipped_errors): clusters never attempted because
+    the call budget ran out, and clusters never attempted because the API-error breaker
+    tripped. Two different stories for the digest.
+    """
     results: list[IdeaResult] = []
     skipped_budget: list[Cluster] = []
+    skipped_errors: list[Cluster] = []
     seen_titles: set[str] = set()
     weights = playbook_weights(playbook)
     known_ids = set(signals)
@@ -201,7 +218,7 @@ def ideate_all(
             skipped_budget.append(c)
             continue
         if consecutive_errors >= MAX_CONSECUTIVE_API_ERRORS:
-            skipped_budget.append(c)
+            skipped_errors.append(c)
             continue
         r = ideate_cluster(
             c,
@@ -222,7 +239,7 @@ def ideate_all(
         is_api_error = r.reason.startswith(API_ERROR_PREFIX)
         consecutive_errors = consecutive_errors + 1 if is_api_error else 0
     results.sort(key=lambda r: (-(r.best_score or -1), r.cluster_key))
-    return results, skipped_budget
+    return results, skipped_budget, skipped_errors
 
 
 def projected_calls(n_clusters: int, max_ideas: int, max_iter: int, max_calls: int) -> int:

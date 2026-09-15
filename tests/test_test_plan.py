@@ -4,17 +4,27 @@ from pr_gate import test_plan as tp
 
 REQS = "intro prose\nPB-1: log in\nPB-2: error on bad login\nPB-3: never traced\n"
 DESIGN = [
-    {"id": "TC-001", "title": "login ok", "risk": "high", "scenario": "positive",
-     "traceability": ["PB-1"]},
-    {"id": "TC-002", "title": "bad login", "risk": "high", "scenario": "negative",
-     "traceability": ["PB-2"], "unknowns": ["UNKNOWN: error text"]},
-    {"id": "TC-003", "title": "edge", "risk": "low", "scenario": "edge",
-     "traceability": ["PB-1"]},
+    {
+        "id": "TC-001",
+        "title": "login ok",
+        "risk": "high",
+        "scenario": "positive",
+        "traceability": ["PB-1"],
+    },
+    {
+        "id": "TC-002",
+        "title": "bad login",
+        "risk": "high",
+        "scenario": "negative",
+        "traceability": ["PB-2"],
+        "unknowns": ["UNKNOWN: error text"],
+    },
+    {"id": "TC-003", "title": "edge", "risk": "low", "scenario": "edge", "traceability": ["PB-1"]},
 ]
-SPEC = '''
+SPEC = """
 test("TC-001 login ok PB-1", async () => {});
 test.fixme("TC-002 bad login PB-2", async () => {});
-'''
+"""
 
 
 def test_load_requirements_only_takes_id_lines():
@@ -57,8 +67,15 @@ def test_exit_criteria_are_computed_not_asserted(tmp_path):
 def test_render_includes_blocked_section_with_unknowns(tmp_path):
     spec = tmp_path / "a.spec.ts"
     spec.write_text(SPEC)
-    plan = tp.build_plan(app="demo", base_url="http://x", requirements=tp.load_requirements(REQS),
-                         design=DESIGN, spec_paths=[str(spec)], constraints=["c1"], incidents=None)
+    plan = tp.build_plan(
+        app="demo",
+        base_url="http://x",
+        requirements=tp.load_requirements(REQS),
+        design=DESIGN,
+        spec_paths=[str(spec)],
+        constraints=["c1"],
+        incidents=None,
+    )
     md = tp.render_markdown(plan)
     assert "## Blocked" in md
     assert "UNKNOWN: error text" in md

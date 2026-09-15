@@ -3,6 +3,7 @@
 The load-bearing cases are the verdict rollup (regression → NO-GO, flaky-only →
 HOLD, clean → GO) and that each signal maps to the right row + directive.
 """
+
 from __future__ import annotations
 
 from pr_gate import qe_board as qb
@@ -19,9 +20,13 @@ def _flake(**verdicts):
     """verdicts: id -> (verdict, spark, last)."""
     journeys, file_bug, quarantine = {}, [], []
     for jid, (v, spark, last) in verdicts.items():
-        journeys[jid] = {"verdict": v, "spark": spark, "history": list(last),
-                         "file_bug": v in ("regression", "stable-fail"),
-                         "action": v}
+        journeys[jid] = {
+            "verdict": v,
+            "spark": spark,
+            "history": list(last),
+            "file_bug": v in ("regression", "stable-fail"),
+            "action": v,
+        }
         if v in ("regression", "stable-fail"):
             file_bug.append(jid)
         if v == "flaky":
@@ -30,6 +35,7 @@ def _flake(**verdicts):
 
 
 # ---- verdict rollup -------------------------------------------------------- #
+
 
 def test_regression_is_no_go():
     flake = _flake(**{"TMVC-7": ("regression", "PPPFF", ["pass", "fail"])})
@@ -53,8 +59,12 @@ def test_all_clean_is_go():
 
 
 def test_drift_alone_is_hold():
-    drift = {"drifted": [{"id": "TMVC-5", "tests": ["e2e/x.spec.ts"]}],
-             "removed": [], "new": [], "uncovered": []}
+    drift = {
+        "drifted": [{"id": "TMVC-5", "tests": ["e2e/x.spec.ts"]}],
+        "removed": [],
+        "new": [],
+        "uncovered": [],
+    }
     m = qb.build_model(REQS, drift=drift)
     assert m["light"] == "amber"
     row = next(r for r in m["rows"] if r["id"] == "TMVC-5")
@@ -62,48 +72,65 @@ def test_drift_alone_is_hold():
 
 
 def test_removed_with_tests_is_no_go():
-    drift = {"drifted": [], "removed": [{"id": "TMVC-9", "tests": ["e2e/x.spec.ts"]}],
-             "new": [], "uncovered": []}
+    drift = {
+        "drifted": [],
+        "removed": [{"id": "TMVC-9", "tests": ["e2e/x.spec.ts"]}],
+        "new": [],
+        "uncovered": [],
+    }
     m = qb.build_model(REQS, drift=drift)
     assert m["light"] == "red"
 
 
 def test_intent_weak_is_hold_with_tile_and_directive():
-    intent = {"rows": [
-        {"id": "TMVC-5", "grade": "weak"}, {"id": "TMVC-1", "grade": "strong"},
-        {"id": "TMVC-2", "grade": "untested"}]}
+    intent = {
+        "rows": [
+            {"id": "TMVC-5", "grade": "weak"},
+            {"id": "TMVC-1", "grade": "strong"},
+            {"id": "TMVC-2", "grade": "untested"},
+        ]
+    }
     m = qb.build_model(REQS, intent=intent)
-    assert m["light"] == "amber"                          # weak intent → HOLD
-    assert m["tiles"]["intent"] == 2                       # weak + untested
+    assert m["light"] == "amber"  # weak intent → HOLD
+    assert m["tiles"]["intent"] == 2  # weak + untested
     titles = [d["title"] for d in m["directives"]]
     assert any("Assert the requirement" in t for t in titles)
     assert m["sources"]["intent_coverage"] is True
 
 
 def test_intent_strong_only_does_not_gate():
-    intent = {"rows": [{"id": "TMVC-1", "grade": "strong"},
-                       {"id": "TMVC-2", "grade": "partial"}]}
+    intent = {"rows": [{"id": "TMVC-1", "grade": "strong"}, {"id": "TMVC-2", "grade": "partial"}]}
     m = qb.build_model(REQS, intent=intent)
     assert m["light"] == "green" and m["tiles"]["intent"] == 0
 
 
 def test_serious_a11y_is_no_go():
-    a11y = {"findings": [{"severity": "serious", "target": "btn", "rule": "A11Y-NAME"}],
-            "summary": {"total": 1, "serious": 1, "moderate": 0, "minor": 0}}
+    a11y = {
+        "findings": [{"severity": "serious", "target": "btn", "rule": "A11Y-NAME"}],
+        "summary": {"total": 1, "serious": 1, "moderate": 0, "minor": 0},
+    }
     m = qb.build_model(REQS, a11y=a11y)
     assert m["light"] == "red"
 
 
 # ---- tiles + rows ---------------------------------------------------------- #
 
+
 def test_tiles_count_each_signal():
-    flake = _flake(**{"TMVC-7": ("regression", "PPPFF", ["fail"]),
-                      "TMVC-2": ("flaky", "P~PP~", ["pass"])})
+    flake = _flake(
+        **{"TMVC-7": ("regression", "PPPFF", ["fail"]), "TMVC-2": ("flaky", "P~PP~", ["pass"])}
+    )
     drift = {"drifted": [{"id": "TMVC-5", "tests": []}], "removed": [], "new": [], "uncovered": []}
     a11y = {"findings": [], "summary": {"total": 2, "serious": 0, "moderate": 2, "minor": 0}}
     m = qb.build_model(REQS, flake=flake, drift=drift, a11y=a11y)
-    assert m["tiles"] == {"requirements": 4, "regression": 1, "flaky": 1, "drift": 1,
-                          "a11y": 2, "intent": 0}
+    assert m["tiles"] == {
+        "requirements": 4,
+        "regression": 1,
+        "flaky": 1,
+        "drift": 1,
+        "a11y": 2,
+        "intent": 0,
+    }
 
 
 def test_uncovered_row_is_flagged():
@@ -115,14 +142,20 @@ def test_uncovered_row_is_flagged():
 
 # ---- directives ------------------------------------------------------------ #
 
+
 def test_directives_rank_regression_first():
-    flake = _flake(**{"TMVC-7": ("regression", "PPPFF", ["fail"]),
-                      "TMVC-2": ("flaky", "P~PP~", ["pass"])})
-    drift = {"drifted": [{"id": "TMVC-5", "tests": ["e2e/x.spec.ts"]}], "removed": [],
-             "new": [], "uncovered": []}
+    flake = _flake(
+        **{"TMVC-7": ("regression", "PPPFF", ["fail"]), "TMVC-2": ("flaky", "P~PP~", ["pass"])}
+    )
+    drift = {
+        "drifted": [{"id": "TMVC-5", "tests": ["e2e/x.spec.ts"]}],
+        "removed": [],
+        "new": [],
+        "uncovered": [],
+    }
     m = qb.build_model(REQS, flake=flake, drift=drift)
     titles = [d["title"] for d in m["directives"]]
-    assert "critical path" in titles[0].lower()          # regression ranked first
+    assert "critical path" in titles[0].lower()  # regression ranked first
     assert any("drift" in t.lower() for t in titles)
     assert any("quarantine" in t.lower() for t in titles)
 
@@ -135,14 +168,15 @@ def test_no_signals_yields_go_and_no_directives():
 
 # ---- rendering smoke ------------------------------------------------------- #
 
+
 def test_render_html_is_selfcontained_and_has_data():
     flake = _flake(**{"TMVC-7": ("regression", "PPPFF", ["fail"])})
     html = qb.render_html(qb.build_model(REQS, flake=flake, app="todomvc"))
     assert html.startswith("<!doctype html>")
     assert "NO-GO" in html and "TMVC-7" in html
     assert "todomvc" in html
-    assert "{{" not in html                              # every token replaced
-    assert "v-red" in html                               # verdict color wired
+    assert "{{" not in html  # every token replaced
+    assert "v-red" in html  # verdict color wired
 
 
 def test_render_escapes_requirement_text():

@@ -27,7 +27,15 @@ scene_adapters = pytest.importorskip("scene_adapters")
 
 ENGINES = scene_adapters.supported_engines()
 EXPECTED = {
-    "sigma", "chartjs", "fabric", "pixi", "konva", "echarts", "cytoscape", "three", "phaser",
+    "sigma",
+    "chartjs",
+    "fabric",
+    "pixi",
+    "konva",
+    "echarts",
+    "cytoscape",
+    "three",
+    "phaser",
 }
 
 
@@ -36,6 +44,7 @@ def _scene(engine, value="Alpha", by="name", instance="window.__x"):
 
 
 # --- registry -----------------------------------------------------------------
+
 
 def test_expected_engines_registered():
     assert set(ENGINES) == EXPECTED
@@ -49,6 +58,7 @@ def test_unknown_engine_raises():
 
 
 # --- expression shape ---------------------------------------------------------
+
 
 @pytest.mark.parametrize("engine", ENGINES)
 def test_point_expr_is_an_arrow_that_stashes_and_returns(engine):
@@ -72,6 +82,7 @@ def test_default_instance_used_when_omitted():
 
 # --- escaping: value/by are always JSON-encoded, and the JS parses ------------
 
+
 @pytest.mark.parametrize("engine", ENGINES)
 def test_value_is_json_encoded_not_raw(engine):
     value = "O'Brien"
@@ -80,7 +91,7 @@ def test_value_is_json_encoded_not_raw(engine):
 
 
 NODE = shutil.which("node")
-TRICKY = "O'Brien \"the\" \\end\nline"  # apostrophe, quote, backslash, newline
+TRICKY = 'O\'Brien "the" \\end\nline'  # apostrophe, quote, backslash, newline
 
 
 @pytest.mark.skipif(NODE is None, reason="node not on PATH")
@@ -92,8 +103,10 @@ def test_emitted_js_is_syntactically_valid(engine):
     fix addressed) emits unparseable JS and fails this — for point AND count.
     """
     scene = _scene(engine, value=TRICKY, by="name")
-    for kind, expr in (("point", scene_adapters.point_expr(scene)),
-                       ("count", scene_adapters.count_expr(scene))):
+    for kind, expr in (
+        ("point", scene_adapters.point_expr(scene)),
+        ("count", scene_adapters.count_expr(scene)),
+    ):
         with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False) as fh:
             fh.write("const __f = (" + expr + ");\n")
             path = fh.name
@@ -106,17 +119,21 @@ def test_emitted_js_is_syntactically_valid(engine):
 
 # --- validate_scene -----------------------------------------------------------
 
+
 def test_validate_scene_accepts_good():
     assert scene_adapters.validate_scene(_scene("sigma", by="label")) == []
 
 
-@pytest.mark.parametrize("bad,needle", [
-    ("not-a-dict", "must be an object"),
-    ({"by": "label", "value": "X"}, "engine"),                       # missing engine
-    ({"engine": "nope", "by": "label", "value": "X"}, "engine"),     # unknown engine
-    ({"engine": "sigma", "value": "X"}, "by"),                       # missing by
-    ({"engine": "sigma", "by": "label"}, "value"),                   # missing value
-])
+@pytest.mark.parametrize(
+    "bad,needle",
+    [
+        ("not-a-dict", "must be an object"),
+        ({"by": "label", "value": "X"}, "engine"),  # missing engine
+        ({"engine": "nope", "by": "label", "value": "X"}, "engine"),  # unknown engine
+        ({"engine": "sigma", "value": "X"}, "by"),  # missing by
+        ({"engine": "sigma", "by": "label"}, "value"),  # missing value
+    ],
+)
 def test_validate_scene_flags_problems(bad, needle):
     problems = scene_adapters.validate_scene(bad)
     assert problems, f"expected a problem for {bad!r}"
@@ -124,6 +141,7 @@ def test_validate_scene_flags_problems(bad, needle):
 
 
 # --- canonical selector -------------------------------------------------------
+
 
 def test_canonical_selector_format():
     assert scene_adapters.canonical_selector("sigma", "label", "Alice") == "scene:sigma/label=Alice"

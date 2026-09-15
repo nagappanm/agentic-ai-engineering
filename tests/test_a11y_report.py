@@ -4,6 +4,7 @@ Covers both sources: cache-derived A11Y-ROLE findings (the promoted `a11y_flag`)
 and the snapshot structural checks (nameless controls, imageless alt, heading
 jumps, duplicate landmarks), plus severity ordering and the --fail-on gate math.
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -21,8 +22,7 @@ def _cache(**flags) -> dict:
     sels = {}
     for name, flagged in flags.items():
         selector = (
-            f"getByTestId('{name}')" if flagged
-            else f"getByRole('button', {{ name: '{name}' }})"
+            f"getByTestId('{name}')" if flagged else f"getByRole('button', {{ name: '{name}' }})"
         )
         sels[name] = {
             "selector": selector,
@@ -35,10 +35,11 @@ def _cache(**flags) -> dict:
 
 # ---- cache-derived findings ------------------------------------------------ #
 
+
 def test_flagged_entry_becomes_role_finding():
     report = a11y.build_report(_cache(cart_badge=True, login_submit=False), None)
     rules = [f["rule"] for f in report["findings"]]
-    assert rules == ["A11Y-ROLE"]                 # only the flagged one
+    assert rules == ["A11Y-ROLE"]  # only the flagged one
     assert report["findings"][0]["target"] == "cart_badge"
     assert report["findings"][0]["severity"] == "moderate"
 
@@ -46,19 +47,24 @@ def test_flagged_entry_becomes_role_finding():
 def test_uniqueness_only_flag_is_minor_not_a_false_alarm():
     # a11y_flag is set, but the reason says the element is labelled — should be a
     # minor uniqueness note (A11Y-UNIQUENESS), NOT a moderate A11Y-ROLE false alarm.
-    cache = {"app": "demo", "selectors": {
-        "inventory.add": {
-            "selector": "getByTestId('add-backpack')", "tier": "testid",
-            "reason": "role+name 'Add to cart' ambiguous (6 matches); NOT an a11y gap "
-                      "— button is labelled; test-id for uniqueness only",
-            "a11y_flag": True,
+    cache = {
+        "app": "demo",
+        "selectors": {
+            "inventory.add": {
+                "selector": "getByTestId('add-backpack')",
+                "tier": "testid",
+                "reason": "role+name 'Add to cart' ambiguous (6 matches); NOT an a11y gap "
+                "— button is labelled; test-id for uniqueness only",
+                "a11y_flag": True,
+            },
+            "cart.badge": {
+                "selector": "getByTestId('cart-badge')",
+                "tier": "testid",
+                "reason": "role-less generic node — genuine a11y gap (should be role=status)",
+                "a11y_flag": True,
+            },
         },
-        "cart.badge": {
-            "selector": "getByTestId('cart-badge')", "tier": "testid",
-            "reason": "role-less generic node — genuine a11y gap (should be role=status)",
-            "a11y_flag": True,
-        },
-    }}
+    }
     report = a11y.build_report(cache, None)
     by_target = {f["target"]: f for f in report["findings"]}
     assert by_target["inventory.add"]["rule"] == "A11Y-UNIQUENESS"
@@ -111,26 +117,27 @@ def test_image_without_alt_is_moderate():
 def test_heading_jump_flagged():
     findings = a11y.findings_from_snapshot(a11y.parse_snapshot(SNAP))
     jumps = [f for f in findings if f["rule"] == "A11Y-HEADING-ORDER"]
-    assert len(jumps) == 1                        # h1 -> h3 skips h2
+    assert len(jumps) == 1  # h1 -> h3 skips h2
 
 
 def test_duplicate_landmark_flagged():
     findings = a11y.findings_from_snapshot(a11y.parse_snapshot(SNAP))
     dup = [f for f in findings if f["rule"] == "A11Y-LANDMARK-DUP"]
-    assert len(dup) == 1 and "main" in dup[0]["evidence"]   # two <main>
+    assert len(dup) == 1 and "main" in dup[0]["evidence"]  # two <main>
 
 
 # ---- report assembly, ordering, gating ------------------------------------- #
 
+
 def test_findings_sorted_serious_first():
     report = a11y.build_report(_cache(x=True), a11y.parse_snapshot(SNAP))
     sevs = [a11y.SEVERITY_ORDER[f["severity"]] for f in report["findings"]]
-    assert sevs == sorted(sevs, reverse=True)     # descending severity
+    assert sevs == sorted(sevs, reverse=True)  # descending severity
     assert report["findings"][0]["severity"] == "serious"
 
 
 def test_fail_on_gate_math():
-    report = a11y.build_report(_cache(x=True), None)   # only moderate present
+    report = a11y.build_report(_cache(x=True), None)  # only moderate present
     top = a11y.max_severity(report)
     assert a11y.SEVERITY_ORDER[top] >= a11y.SEVERITY_ORDER["moderate"]
     assert a11y.SEVERITY_ORDER[top] < a11y.SEVERITY_ORDER["serious"]

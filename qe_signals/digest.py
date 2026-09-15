@@ -62,6 +62,7 @@ def build_model(
     skipped_seen: list[Cluster],
     skipped_budget: list[Cluster],
     prior_run: str | None,
+    skipped_errors: list[Cluster] | None = None,
     notes: list[str],
     top_per_cluster: int = 3,
 ) -> dict:
@@ -138,6 +139,7 @@ def build_model(
         "idea_list": ideas,
         "skipped_seen": [c.key_term for c in skipped_seen],
         "skipped_budget": [c.key_term for c in skipped_budget],
+        "skipped_errors": [c.key_term for c in (skipped_errors or [])],
         "notes": list(notes),
     }
 
@@ -226,13 +228,16 @@ def render_markdown(m: dict) -> str:
         out.append(f"- **Evidence:** {', '.join(ev) if ev else '_none_'}")
         out.append("")
 
-    if m["skipped_seen"] or m["skipped_budget"]:
+    skipped_errors = m.get("skipped_errors", [])
+    if m["skipped_seen"] or m["skipped_budget"] or skipped_errors:
         out.append("## Skipped clusters")
         out.append("")
         for k in m["skipped_seen"]:
             out.append(f"- `{_clean(k)}` — already ideated in the previous run")
         for k in m["skipped_budget"]:
             out.append(f"- `{_clean(k)}` — LLM call budget exhausted")
+        for k in skipped_errors:
+            out.append(f"- `{_clean(k)}` — skipped after repeated LLM API errors")
         out.append("")
 
     failed = [h for h in m["health"] if h["status"] == SourceStatus.FAILED]

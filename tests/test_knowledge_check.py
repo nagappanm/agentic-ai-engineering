@@ -4,6 +4,7 @@ Pure-function tests over `decide()` + the cache signature — no filesystem need
 The load-bearing one is `test_audit_only_refresh_is_not_stale`: a routine audit
 must NOT trip the check, or the amber gate signal (Phase 2) would be noise.
 """
+
 from __future__ import annotations
 
 import copy
@@ -29,18 +30,30 @@ def make_cache() -> dict:
         "selectors": {
             "todo.newInput": {
                 "selector": "getByRole('textbox', { name: 'New todo' })",
-                "tier": "role", "page": "/", "a11y_flag": False,
-                "status": "approved", "verified": "2026-07-16", "confidence": 1.0,
+                "tier": "role",
+                "page": "/",
+                "a11y_flag": False,
+                "status": "approved",
+                "verified": "2026-07-16",
+                "confidence": 1.0,
             },
             "todo.count": {
                 "selector": "getByTestId('todo-count')",
-                "tier": "testid", "page": "/", "a11y_flag": True,
-                "status": "approved", "verified": "2026-07-16", "confidence": 0.75,
+                "tier": "testid",
+                "page": "/",
+                "a11y_flag": True,
+                "status": "approved",
+                "verified": "2026-07-16",
+                "confidence": 0.75,
             },
             "filter.all": {
                 "selector": "getByRole('link', { name: 'All' })",
-                "tier": "role", "page": "/", "a11y_flag": False,
-                "status": "approved", "verified": "2026-07-16", "confidence": 1.0,
+                "tier": "role",
+                "page": "/",
+                "a11y_flag": False,
+                "status": "approved",
+                "verified": "2026-07-16",
+                "confidence": 1.0,
             },
         },
     }
@@ -69,7 +82,9 @@ def test_stale_on_structural_change():
     fm = reconciled_frontmatter(cache)  # signature captured BEFORE the change
     cache["selectors"]["checkout.placeOrder"] = {
         "selector": "getByRole('button', { name: 'Place order' })",
-        "tier": "role", "page": "/checkout", "a11y_flag": False,
+        "tier": "role",
+        "page": "/checkout",
+        "a11y_flag": False,
     }
     result = decide(cache, fm, BODY)
     assert result["status"] == "update-needed"
@@ -94,7 +109,9 @@ def test_undocumented_area_flagged():
     cache = make_cache()
     cache["selectors"]["checkout.placeOrder"] = {
         "selector": "getByRole('button', { name: 'Place order' })",
-        "tier": "role", "page": "/checkout", "a11y_flag": False,
+        "tier": "role",
+        "page": "/checkout",
+        "a11y_flag": False,
     }
     fm = reconciled_frontmatter(cache)  # reconcile signature so ONLY coverage can fire
     result = decide(cache, fm, BODY)  # BODY never mentions "checkout"
@@ -107,7 +124,9 @@ def test_recorded_group_is_ignored():
     cache = make_cache()
     cache["selectors"]["recorded.toggleFoo"] = {
         "selector": "getByRole('checkbox', { name: 'Toggle Foo' })",
-        "tier": "role", "page": "/", "a11y_flag": False,
+        "tier": "role",
+        "page": "/",
+        "a11y_flag": False,
     }
     fm = reconciled_frontmatter(cache)
     result = decide(cache, fm, BODY)  # BODY never mentions "recorded"

@@ -22,8 +22,15 @@ def _seal_pack(tmp_path, *, light="green", prev=None):
     tg = tmp_path / "testguard.json"
     tg.write_text('{"summary": {"meanScore": 100}}')
     manifest = ev.build_manifest({"journeys": str(results), "testguard": str(tg)})
-    meta = {"app": "tmvc", "pr": "42", "sha": "abc12345", "branch": "main",
-            "run_id": "1", "created": 111, "tool_versions": {"qe_evidence": ev.SCHEMA}}
+    meta = {
+        "app": "tmvc",
+        "pr": "42",
+        "sha": "abc12345",
+        "branch": "main",
+        "run_id": "1",
+        "created": 111,
+        "tool_versions": {"qe_evidence": ev.SCHEMA},
+    }
     return ev.build_pack(_verdict(light), manifest, meta=meta, prev_seal=prev), results, tg
 
 

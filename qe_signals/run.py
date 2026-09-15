@@ -357,7 +357,7 @@ def _pipeline(args, reg, playbook, config_sha, root, now, notes, finish, deps: D
 
     # ── ideate ──
     llm = LLM(deps.llm_client, model=args.model, budget=CallBudget(args.max_calls))
-    results, skipped_budget = ideate_all(
+    results, skipped_budget, skipped_errors = ideate_all(
         fresh,
         sig_map,
         playbook,
@@ -384,6 +384,7 @@ def _pipeline(args, reg, playbook, config_sha, root, now, notes, finish, deps: D
         results=results,
         skipped_seen=skipped_seen,
         skipped_budget=skipped_budget,
+        skipped_errors=skipped_errors,
         prior_run=prior.name if prior else None,
         notes=notes,
     )

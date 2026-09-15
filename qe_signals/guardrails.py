@@ -29,7 +29,7 @@ HEDGES = (
     "may be able to",
 )
 MEASURABLE = re.compile(
-    r"\b(rate|ratio|time|count|number|percent|%|coverage|mttr|mttd|latency|duration|"
+    r"%|\b(rate|ratio|time|count|number|percent|coverage|mttr|mttd|latency|duration|"
     r"per (?:week|day|run|release|pr)|frequency|minutes?|hours?|days?|seconds?|"
     r"defects?|failures?|escapes?|flak(?:y|iness)|cycle)\b",
     re.I,

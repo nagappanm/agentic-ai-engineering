@@ -152,7 +152,7 @@ def test_never_clears_bar_returns_best_labelled():
 
 def test_invalid_draft_twice_abandons_cluster_but_others_continue():
     L = _llm("nope", "still nope", idea_json(evidence=["s2"], title="T"), judge_json(80, 80))
-    results, skipped = ideate.ideate_all([C1, C2], SIGNALS, PLAYBOOK, L, max_ideas=5, bar=75)
+    results, skipped, _ = ideate.ideate_all([C1, C2], SIGNALS, PLAYBOOK, L, max_ideas=5, bar=75)
     by_key = {r.cluster_key: r for r in results}
     assert by_key["flaky"].best is None and by_key["flaky"].reason == "invalid_output"
     assert by_key["trace"].met_bar
@@ -178,7 +178,7 @@ def test_max_ideas_limits_clusters():
     L = _llm(
         idea_json(), judge_json(80, 80), idea_json(evidence=["s2"], title="B"), judge_json(80, 80)
     )
-    results, _ = ideate.ideate_all([C1, C2, C1], SIGNALS, PLAYBOOK, L, max_ideas=2, bar=75)
+    results, _, _ = ideate.ideate_all([C1, C2, C1], SIGNALS, PLAYBOOK, L, max_ideas=2, bar=75)
     assert len(results) == 2
 
 
@@ -191,7 +191,7 @@ def test_invalid_judge_scores_zero_and_consumes_iteration():
 
 def test_call_budget_skips_remaining_clusters_and_still_returns():
     L = _llm(idea_json(), judge_json(80, 80), idea_json(evidence=["s2"], title="B"), max_calls=3)
-    results, skipped = ideate.ideate_all([C1, C2], SIGNALS, PLAYBOOK, L, max_ideas=5, bar=75)
+    results, skipped, _ = ideate.ideate_all([C1, C2], SIGNALS, PLAYBOOK, L, max_ideas=5, bar=75)
     assert results[0].cluster_key == "flaky" and results[0].met_bar
     trace = [r for r in results if r.cluster_key == "trace"][0]
     assert trace.reason == "budget" and trace.best is None
@@ -207,12 +207,40 @@ def test_api_error_is_recorded_not_raised_and_breaker_trips():
             raise ConnectionError("dns down")
 
     L = llm.LLM(Boom(), model="m")
-    results, skipped = ideate.ideate_all([C1, C2, C1, C2], SIGNALS, PLAYBOOK, L, max_ideas=8)
+    results, skipped_budget, skipped_errors = ideate.ideate_all(
+        [C1, C2, C1, C2], SIGNALS, PLAYBOOK, L, max_ideas=8
+    )
     assert len(results) == ideate.MAX_CONSECUTIVE_API_ERRORS
     assert all(
         r.best is None and r.reason.startswith("api_error: ConnectionError") for r in results
     )
-    assert len(skipped) == 1  # breaker tripped; the 4th cluster was not attempted
+    assert skipped_budget == [] and len(skipped_errors) == 1  # breaker, not budget
+
+
+def test_judge_omitting_a_criterion_scores_it_zero():
+    L = _llm(
+        idea_json(),
+        json.dumps({"score": 95, "per_criterion": {"never_silent": 95}, "fix_list": []}),
+    )
+    r = ideate.ideate_cluster(C1, SIGNALS, PLAYBOOK, L, bar=75, max_iter=1)
+    assert r.best_score == 47.5 and not r.met_bar  # 95*50 + 0*50 over 100
+    assert (
+        ideate.weighted_score({"Never Silent": 100}, {"never_silent": 50, "traceability": 50})
+        == 0.0
+    )
+    assert ideate.missing_criteria(
+        {"never_silent": 1}, {"never_silent": 50, "traceability": 50}
+    ) == ["traceability"]
+
+
+def test_render_signals_caps_members():
+    from qe_signals import prompts
+
+    sigs = {f"s{i}": SIGNALS["s1"].model_copy(update={"id": f"s{i}"}) for i in range(30)}
+    big = Cluster(key_term="k", member_ids=list(sigs), top_score=1, total_score=1)
+    text = prompts.render_signals(big, sigs)
+    assert text.count("[id=") == prompts.MAX_MEMBERS_IN_PROMPT
+    assert "(+18 lower-scoring signals" in text
 
 
 def test_projected_calls():

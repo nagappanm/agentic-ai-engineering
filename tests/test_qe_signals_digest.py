@@ -189,6 +189,25 @@ def test_javascript_url_is_never_a_link():
     assert "Evil (`javascript:alert(1)`)" in md
 
 
+def test_no_idea_cluster_and_api_error_skips_render_with_reasons():
+    none_result = IdeaResult(
+        cluster_key="odd|key",
+        best=None,
+        best_score=None,
+        met_bar=False,
+        iterations=[],
+        reason="budget",
+    )
+    md = digest.render_markdown(
+        _model(
+            results=[none_result],
+            skipped_errors=[Cluster(key_term="e", member_ids=["s1"], top_score=1, total_score=1)],
+        )
+    )
+    assert "(no idea for cluster `odd\\|key`) — budget" in md
+    assert "`e` — skipped after repeated LLM API errors" in md
+
+
 def test_backlog_json_sidecar():
     m = _model()
     res = [_result("flaky", _idea("High idea", ["s1"]), 88, True)]

@@ -61,6 +61,11 @@ def test_unmeasurable_metric():
     )
 
 
+def test_percent_metric_is_measurable():
+    r = guardrails.check(_idea(quality_metric="% of PRs with generated tests"), IDS, URLS)
+    assert "unmeasurable_metric" not in _kinds(r)
+
+
 def test_hedging_phrase():
     r = guardrails.check(_idea(problem="This could potentially help."), IDS, URLS)
     assert "hedging" in _kinds(r) and "could potentially" in r.as_text()
