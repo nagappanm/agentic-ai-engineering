@@ -61,6 +61,9 @@ never silent); omit the input entirely to opt out.
 | `tracker.py` | file the bug: **Jira REST** / **GitHub `gh`** / `--dry-run`; dedup + link-to-story |
 | `retest.py` | close the loop: on a green re-run, **close the bug the journey filed**, citing the evidence seal; keep it open (with the error head) while it still fails; never close on a passing *suite* |
 | `test_plan.py` | the planning artefact — scope, entry/exit criteria (**computed, not asserted**), risk-ordered order of play, traceability — derived from the requirement + yilsf design + specs |
+| `env_setup.py` | STLC phase 4 — make the test environment a checked precondition: app reachable, a usable account verified (register if the demo reset it), credentials written to a dotenv; exits non-zero so execution never runs against a broken env |
+| `closure.py` | STLC phase 6 — the test cycle closure report: passed / failed / **skipped-is-not-failed**, open vs resolved defects, one ship verdict (GO/HOLD/NO-GO) composed from the plan + results + retest |
+| `stlc_demo.sh` | runs all six canonical STLC phases live end-to-end (`make stlc-demo`); exit mirrors the closure verdict |
 | `requirements_source.py` | requirement text from the linked Jira key (REST), else `e2e/requirements.txt` |
 
 ## Flakiness triage (`flakedoctor.py`)

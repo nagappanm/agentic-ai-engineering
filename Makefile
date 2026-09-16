@@ -28,6 +28,9 @@ signals:        ## Weekly QE signal digest: fetch → rank → ideate → delive
 signals-dry:    ## Fetch + rank only, no LLM spend; prints clusters and projected call count
 	python -m qe_signals.run --dry-run $(ARGS)
 
+stlc-demo:      ## Run all six STLC phases live against ParaBank (0 GO · 10 HOLD · 20 NO-GO)
+	bash pr_gate/stlc_demo.sh
+
 clean:          ## Remove caches and build artifacts
 	rm -rf build dist *.egg-info src/*.egg-info .pytest_cache .ruff_cache
 	find . -type d -name __pycache__ -exec rm -rf {} +
