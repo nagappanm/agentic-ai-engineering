@@ -81,3 +81,12 @@ QE_SIGNALS_RUN_NETWORK_TESTS=1 pytest tests/test_qe_signals_fetch.py -k live
 `QE_SIGNALS_COGNEE_PYTHON`) and stores one document for the digest plus one per idea in
 dataset `qe_signals`. Cognee dedupes identical text, so re-pushing an unchanged digest is a
 no-op. Query from Claude Code with the `recall` tool and `datasets="qe_signals"`.
+
+**Cognee's own `cognify` bills the Anthropic API key** (pay-as-you-go), not the Claude Code
+session — Claude Code does not grant MCP servers the `sampling` capability, so
+`LLM_PROVIDER=mcp-sampling` fails (tried 2026-09-16). Credit-free alternative used for W38:
+`~/cognee/session_cognify.py <graph.json>` — the session model authors the entities,
+relationships and summaries into a JSON file and the script hands them to Cognee's pipeline
+via the `calculate_chunk_graphs=` hook; Cognee still chunks, embeds (fastembed, local) and
+stores, with no LLM call. Read back with `recall(search_type="CHUNKS")` (vector-only) — the
+default graph-completion search would call the API.

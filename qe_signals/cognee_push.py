@@ -58,6 +58,9 @@ def _load_env() -> None:
     load_dotenv(Path.home() / "agentic-ai-engineering" / ".env")
     if "ANTHROPIC_API_KEY" in os.environ:
         os.environ.setdefault("LLM_API_KEY", os.environ["ANTHROPIC_API_KEY"])
+    # standalone runs use the API key; the MCP server (mcp.sh) uses host sampling instead
+    os.environ.setdefault("LLM_PROVIDER", "anthropic")
+    os.environ.setdefault("LLM_MODEL", "claude-sonnet-5")
 
 
 async def push(docs: list[str]) -> int:
