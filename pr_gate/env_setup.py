@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""env_setup — STLC phase 4: make the test environment real before executing.
+
+The phase the earlier runs skipped, and the one that kept breaking them: the
+ParaBank public demo resets, so `test`/`test` stops verifying and every
+login-dependent case fails at login.htm — an environment fault dressed up as a
+test failure. This makes the environment a checked precondition instead of an
+assumption:
+
+  1. reachable   — the app answers
+  2. account     — a usable login exists (verify the candidate; register if not)
+  3. verified    — the final credentials actually log in
+
+It writes the working credentials to a dotenv the run sources, and exits non-zero
+if the environment is not ready — so execution never runs against a broken env
+and misreports it as red.
+
+  python pr_gate/env_setup.py --app parabank \\
+      --base-url https://parabank.parasoft.com/parabank/ --out .ci/stlc/parabank/env.sh
+
+Parabank-specific by design (it is the demo's subject). Other apps get the
+reachability check only, which is the honest generic floor.
+"""
+
+from __future__ import annotations
+
+import argparse
+import http.cookiejar
+import json
+import ssl
+import sys
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+DEFAULT_CREDS = {"parabank": ("test", "test")}
+
+
+def _opener() -> urllib.request.OpenerDirector:
+    # The demo ships a cert chain Python won't verify by default; the demo is
+    # public and read-only, so relaxing verification here is acceptable and scoped
+    # to this provisioning step, never to the tests themselves.
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return urllib.request.build_opener(
+        urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
+        urllib.request.HTTPSHandler(context=ctx),
+    )
+
+
+def reachable(base_url: str, timeout: int = 20) -> bool:
+    try:
+        with _opener().open(base_url, timeout=timeout) as r:  # noqa: S310
+            return 200 <= r.status < 400
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def parabank_login_works(base: str, user: str, pw: str, timeout: int = 20) -> bool:
+    """True iff these credentials reach the account overview (a fresh session each call)."""
+    op = _opener()
+    data = urllib.parse.urlencode({"username": user, "password": pw}).encode()
+    try:
+        with op.open(  # noqa: S310
+            urllib.request.Request(base.rstrip("/") + "/login.htm", data=data), timeout=timeout
+        ) as r:
+            body = r.read().decode(errors="ignore")
+            return "Accounts Overview" in body and "could not be verified" not in body
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def parabank_register(base: str, user: str, pw: str, timeout: int = 30) -> bool:
+    """GET the form first (for the session cookie), then POST. Verify by logging in."""
+    op = _opener()
+    try:
+        op.open(base.rstrip("/") + "/register.htm", timeout=timeout).read()  # noqa: S310
+        form = {
+            "customer.firstName": "Klew", "customer.lastName": "Tester",
+            "customer.address.street": "1 Test St", "customer.address.city": "QA",
+            "customer.address.state": "CA", "customer.address.zipCode": "90001",
+            "customer.phoneNumber": "5550100", "customer.ssn": "000-00-0000",
+            "customer.username": user, "customer.password": pw, "repeatedPassword": pw,
+        }
+        op.open(  # noqa: S310
+            urllib.request.Request(
+                base.rstrip("/") + "/register.htm", data=urllib.parse.urlencode(form).encode()
+            ),
+            timeout=timeout,
+        ).read()
+    except Exception:  # noqa: BLE001
+        return False
+    # The register response is unreliable on the shared demo; the truth is whether
+    # the account now logs in.
+    return parabank_login_works(base, user, pw)
+
+
+def ensure_parabank(base: str) -> dict:
+    """Return {ready, user, password, steps} — verify the default, else register a fresh one."""
+    steps = []
+    user, pw = DEFAULT_CREDS["parabank"]
+    if parabank_login_works(base, user, pw):
+        steps.append(f"default account '{user}' verified")
+        return {"ready": True, "user": user, "password": pw, "steps": steps}
+    steps.append(f"default account '{user}' does not verify — registering a fresh one")
+    import random
+
+    user = f"klew{random.randint(10000, 99999)}"
+    pw = "Klew!2026"
+    if parabank_register(base, user, pw):
+        steps.append(f"registered and verified '{user}'")
+        return {"ready": True, "user": user, "password": pw, "steps": steps}
+    steps.append("registration did not yield a working login (demo may be down)")
+    return {"ready": False, "user": user, "password": pw, "steps": steps}
+
+
+def write_env(out: Path, base_url: str, user: str, pw: str) -> None:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(
+        "# generated by pr_gate/env_setup.py — source before executing the suite\n"
+        f"export PARABANK_USER='{user}'\n"
+        f"export PARABANK_PASSWORD='{pw}'\n"
+        f"export BASE_URL='{base_url}'\n"
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument("--app", required=True)
+    ap.add_argument("--base-url", required=True)
+    ap.add_argument("--out", help="dotenv to write working credentials into")
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args(argv)
+
+    result: dict = {"app": args.app, "base_url": args.base_url, "checks": {}}
+    result["checks"]["reachable"] = reachable(args.base_url)
+
+    if args.app == "parabank" and result["checks"]["reachable"]:
+        acct = ensure_parabank(args.base_url)
+        result["checks"]["account"] = acct["ready"]
+        result["steps"] = acct["steps"]
+        result["ready"] = acct["ready"]
+        if acct["ready"] and args.out:
+            write_env(Path(args.out), args.base_url, acct["user"], acct["password"])
+            result["env_file"] = args.out
+            result["user"] = acct["user"]
+    else:
+        result["ready"] = result["checks"]["reachable"]
+
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        mark = "✅" if result["ready"] else "❌"
+        print(f"{mark} env setup — {args.app} @ {args.base_url}")
+        print(f"  reachable: {'yes' if result['checks']['reachable'] else 'NO'}")
+        for step in result.get("steps", []):
+            print(f"  · {step}")
+        if result.get("env_file"):
+            print(f"  wrote {result['env_file']} (user={result['user']})")
+    return 0 if result["ready"] else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
